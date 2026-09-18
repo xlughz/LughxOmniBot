@@ -10,6 +10,7 @@ import cookieParser from 'cookie-parser';
 import { prisma } from '@lughx/database';
 import authRoutes from './routes/auth';
 import statsRoutes from './routes/stats';
+import serverRoutes from './routes/servers';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -56,3 +57,4 @@ app.listen(PORT, () => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/stats', statsRoutes); 
+app.use('/api/servers', serverRoutes);

@@ -55,4 +55,16 @@ client.on('messageCreate', async (message: Message) => {
   }
 });
 
+// Endpoint xuất danh sách server
+app.get('/internal/servers', (req, res) => {
+  const servers = client.guilds.cache.map(guild => ({
+    id: guild.id,
+    name: guild.name,
+    icon: guild.iconURL({ extension: 'png', size: 64 }),
+    memberCount: guild.memberCount,
+  })).sort((a, b) => b.memberCount - a.memberCount); // Sắp xếp theo số member giảm dần
+  
+  res.json(servers);
+});
+
 client.login(process.env.DISCORD_BOT_TOKEN);
