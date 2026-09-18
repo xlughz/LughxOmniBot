@@ -2,7 +2,7 @@ import { Client, GatewayIntentBits, Message } from 'discord.js';
 import { config } from 'dotenv';
 import { join } from 'path';
 import { prisma } from '@lughx/database';
-import express from 'express'; // Thêm Express cho Internal API
+import express from 'express';
 
 // Nạp biến môi trường từ thư mục gốc
 config({ path: join(__dirname, '../../../.env') });
@@ -11,7 +11,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent, // Bắt buộc phải có để đọc được tin nhắn (prefix !l)
+    GatewayIntentBits.MessageContent,
   ],
 });
 
@@ -21,6 +21,7 @@ const PREFIX = '!l';
 const app = express();
 const INTERNAL_PORT = 5001;
 
+// 1. Thống kê chung
 app.get('/internal/stats', (req, res) => {
   res.json({
     totalBots: 1, 
@@ -29,6 +30,50 @@ app.get('/internal/stats', (req, res) => {
   });
 });
 
+// 2. Danh sách toàn bộ server
+app.get('/internal/servers', (req, res) => {
+  const servers = client.guilds.cache.map(guild => ({
+    id: guild.id,
+    name: guild.name,
+    icon: guild.iconURL({ extension: 'png', size: 64 }),
+    memberCount: guild.memberCount,
+  })).sort((a, b) => b.memberCount - a.memberCount);
+  
+  res.json(servers);
+});
+
+// 3. Chi tiết 1 server và danh sách kênh chat
+app.get('/internal/servers/:id', async (req, res) => {
+  try {
+    const guildId = req.params.id;
+    // Tìm trong cache trước, nếu không có thì kéo trực tiếp từ Discord API
+    const guild = client.guilds.cache.get(guildId) || await client.guilds.fetch(guildId).catch(() => null);
+
+    if (!guild) {
+      return res.status(404).json({ error: 'Bot không có trong server này' });
+    }
+
+    // Đảm bảo fetch đầy đủ channels
+    const channelsMap = await guild.channels.fetch().catch(() => guild.channels.cache);
+    const channels = channelsMap
+      ? Array.from(channelsMap.values())
+          .filter(c => c && c.isTextBased())
+          .map(c => ({ id: c.id, name: c.name }))
+      : [];
+
+    res.json({
+      id: guild.id,
+      name: guild.name,
+      icon: guild.iconURL({ extension: 'png', size: 256 }),
+      channels,
+    });
+  } catch (error) {
+    console.error('[INTERNAL_SERVER_DETAIL_ERROR]', error);
+    res.status(500).json({ error: 'Lỗi lấy dữ liệu server từ Bot' });
+  }
+});
+
+// Bắt đầu lắng nghe sau khi đã đăng ký toàn bộ endpoints
 app.listen(INTERNAL_PORT, () => {
   console.log(`[BOT-INTERNAL] API noi bo dang chay tai cong ${INTERNAL_PORT}`);
 });
@@ -53,35 +98,6 @@ client.on('messageCreate', async (message: Message) => {
   if (command === 'help') {
     message.reply('**LughxOmniBot - Danh sách lệnh:**\n`!lping` - Kiểm tra độ trễ mạng\n`!lhelp` - Xem bảng trợ giúp này');
   }
-});
-
-// Endpoint xuất danh sách server
-app.get('/internal/servers', (req, res) => {
-  const servers = client.guilds.cache.map(guild => ({
-    id: guild.id,
-    name: guild.name,
-    icon: guild.iconURL({ extension: 'png', size: 64 }),
-    memberCount: guild.memberCount,
-  })).sort((a, b) => b.memberCount - a.memberCount); // Sắp xếp theo số member giảm dần
-  
-  res.json(servers);
-});
-
-// Endpoint lấy thông tin chi tiết 1 server (bao gồm danh sách kênh chat)
-app.get('/internal/servers/:id', (req, res) => {
-  const guild = client.guilds.cache.get(req.params.id);
-  if (!guild) return res.status(404).json({ error: 'Bot không có trong server này' });
-  
-  const channels = guild.channels.cache
-    .filter(c => c.isTextBased())
-    .map(c => ({ id: c.id, name: c.name }));
-
-  res.json({
-    id: guild.id,
-    name: guild.name,
-    icon: guild.iconURL({ extension: 'png', size: 256 }),
-    channels // Trả về danh sách kênh chat
-  });
 });
 
 client.login(process.env.DISCORD_BOT_TOKEN);
