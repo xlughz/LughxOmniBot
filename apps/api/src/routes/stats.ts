@@ -5,17 +5,29 @@ const router = Router();
 
 router.get('/', async (req: Request, res: Response) => {
   try {
-    // Đếm tổng số user đã đăng nhập qua hệ thống từ Database
+    // Đếm tổng số user từ Database
     const totalUsers = await prisma.user.count();
 
-    // Trả về dữ liệu thống kê
+    // Lấy thông số Realtime từ Bot (qua cổng nội bộ 5001)
+    let botStats = { activeServers: 0, systemPing: 0, totalBots: 0 };
+    
+    try {
+      const botRes = await fetch('http://localhost:5001/internal/stats');
+      if (botRes.ok) {
+        botStats = await botRes.json();
+      }
+    } catch (botError) {
+      console.warn('[API] Bot hiện đang offline hoặc chưa mở cổng nội bộ 5001');
+    }
+
+    // Trả về dữ liệu tổng hợp cho Frontend
     res.json({
       success: true,
       data: {
-        totalBots: 1, // Hiện tại đang chạy 1 cụm LughxOmniBot  
-        activeServers: 24, // Dữ liệu chờ ghép nối với Bot
-        totalUsers: totalUsers > 0 ? totalUsers : 1,
-        systemPing: Math.floor(Math.random() * 20) + 25, // Tạo ping ngẫu nhiên 25-45ms
+        totalBots: botStats.totalBots || 1, // Mặc định là 1 nếu lỗi
+        activeServers: botStats.activeServers || 0,
+        totalUsers: totalUsers > 0 ? totalUsers : 0,
+        systemPing: botStats.systemPing || 0,
       }
     });
   } catch (error) {
