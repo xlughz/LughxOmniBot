@@ -15,12 +15,8 @@ export default function Servers() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleSelectServer = (serverId: string) => {
-    window.location.href = `/dashboard/servers/${serverId}`;
-  };
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative z-20">
       <div>
         <h2 className="text-2xl font-bold tracking-wide">Quản lý Servers</h2>
         <p className="text-sm text-muted mt-1">Danh sách chi tiết các máy chủ Discord mà bot đang hoạt động.</p>
@@ -39,12 +35,10 @@ export default function Servers() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {servers.map((server) => (
-              <div 
+              <a 
                 key={server.id} 
-                onClick={() => handleSelectServer(server.id)}
-                className="flex items-center gap-4 p-4 rounded-lg border border-border bg-background/50 hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer select-none active:scale-[0.99]"
-                role="button"
-                tabIndex={0}
+                href={`/dashboard/servers/${server.id}`}
+                className="relative z-30 flex items-center gap-4 p-4 rounded-lg border border-border bg-background/50 hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer no-underline text-inherit select-none"
               >
                 <img 
                   src={server.icon || 'https://cdn.discordapp.com/embed/avatars/0.png'} 
@@ -58,7 +52,7 @@ export default function Servers() {
                     {server.memberCount?.toLocaleString() || 0} thành viên
                   </p>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         )}
