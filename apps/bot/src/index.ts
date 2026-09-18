@@ -85,9 +85,17 @@ client.once('clientReady', () => {
 });
 
 client.on('messageCreate', async (message: Message) => {
-  if (message.author.bot || !message.content.startsWith(PREFIX)) return;
+  if (message.author.bot || !message.guild) return;
 
-  const args = message.content.slice(PREFIX.length).trim().split(/ +/);
+  // Lấy prefix riêng từ Database (nếu chưa có thì dùng mặc định '!l')
+  const config = await prisma.guildConfig.findUnique({
+    where: { guildId: message.guild.id }
+  });
+  const currentPrefix = config?.prefix || '!l';
+
+  if (!message.content.startsWith(currentPrefix)) return;
+
+  const args = message.content.slice(currentPrefix.length).trim().split(/ +/);
   const command = args.shift()?.toLowerCase();
 
   if (command === 'ping') {
@@ -97,7 +105,24 @@ client.on('messageCreate', async (message: Message) => {
   }
 
   if (command === 'help') {
-    message.reply('**LughxOmniBot - Danh sách lệnh:**\n`!lping` - Kiểm tra độ trễ mạng\n`!lhelp` - Xem bảng trợ giúp này');
+    message.reply(`**LughxOmniBot - Danh sách lệnh (Prefix hiện tại: \`${currentPrefix}\`):**\n\`${currentPrefix}ping\` - Kiểm tra độ trễ mạng\n\`${currentPrefix}help\` - Xem bảng trợ giúp này`);
+  }
+});
+
+client.on('guildMemberAdd', async (member) => {
+  try {
+    const config = await prisma.guildConfig.findUnique({
+      where: { guildId: member.guild.id }
+    });
+
+    if (!config || !config.welcomeChannelId) return;
+
+    const welcomeChannel = member.guild.channels.cache.get(config.welcomeChannelId);
+    if (welcomeChannel && welcomeChannel.isTextBased()) {
+      welcomeChannel.send(`Chào mừng ${member} đã tham gia máy chủ **${member.guild.name}**! 🎉`);
+    }
+  } catch (err) {
+    console.error('[WELCOME_ERROR]', err);
   }
 });
 

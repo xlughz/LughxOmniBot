@@ -6,10 +6,10 @@ const router = Router();
 router.get('/', async (req: Request, res: Response) => {
   try {
     // Đếm tổng số user từ Database
-    const totalUsers = await prisma.user.count();
+    const totalUsers = await prisma.user.count().catch(() => 0);
 
     // Lấy thông số Realtime từ Bot (qua cổng nội bộ 5001)
-    let botStats = { activeServers: 0, systemPing: 0, totalBots: 0 };
+    let botStats: any = {};
     
     try {
       const botRes = await fetch('http://localhost:5001/internal/stats');
@@ -20,14 +20,15 @@ router.get('/', async (req: Request, res: Response) => {
       console.warn('[API] Bot hiện đang offline hoặc chưa mở cổng nội bộ 5001');
     }
 
-    // Trả về dữ liệu tổng hợp cho Frontend
+    // Trả về dữ liệu tổng hợp: giữ nguyên các trường cũ và gộp toàn bộ botStats mới
     res.json({
       success: true,
       data: {
-        totalBots: botStats.totalBots || 1, // Mặc định là 1 nếu lỗi
-        activeServers: botStats.activeServers || 0,
-        totalUsers: totalUsers > 0 ? totalUsers : 0,
-        systemPing: botStats.systemPing || 0,
+        totalBots: 1,
+        activeServers: 0,
+        systemPing: 0,
+        totalUsers,
+        ...botStats, // Gộp toàn bộ uptime, botMemoryMB, systemMemory, cpu, v.v.
       }
     });
   } catch (error) {
