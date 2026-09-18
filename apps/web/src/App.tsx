@@ -5,6 +5,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 import Dashboard from './pages/Dashboard';
 import Servers from './pages/Servers';
 import BotCluster from './pages/BotCluster';
+import Settings from './pages/Settings';
 
 export default function App() {
   return (
@@ -17,6 +18,8 @@ export default function App() {
         <Route path="/dashboard" element={<DashboardLayout />}>
           {/* Outlet mặc định khi vào /dashboard */}
           <Route path="bots" element={<BotCluster />} />
+          <Route index element={<Dashboard />} />
+          <Route path="settings" element={<Settings />} /> 
           <Route index element={<Dashboard />} />
           
           {/* 2. Khai báo route cho trang Servers */}
