@@ -3,6 +3,7 @@ import { config } from 'dotenv';
 import { join } from 'path';
 import { prisma } from '@lughx/database';
 import express from 'express';
+import os from 'os';
 
 // Nạp biến môi trường từ thư mục gốc
 config({ path: join(__dirname, '../../../.env') });
@@ -98,6 +99,31 @@ client.on('messageCreate', async (message: Message) => {
   if (command === 'help') {
     message.reply('**LughxOmniBot - Danh sách lệnh:**\n`!lping` - Kiểm tra độ trễ mạng\n`!lhelp` - Xem bảng trợ giúp này');
   }
+});
+
+app.get('/internal/stats', (req, res) => {
+  const memoryUsage = process.memoryUsage();
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const usedMem = totalMem - freeMem;
+
+  res.json({
+    totalBots: 1,
+    activeServers: client.guilds.cache.size,
+    systemPing: client.ws.ping,
+    uptime: process.uptime(), 
+    botMemoryMB: (memoryUsage.heapUsed / 1024 / 1024).toFixed(1),
+    systemMemory: {
+      usedMB: (usedMem / 1024 / 1024).toFixed(0),
+      totalMB: (totalMem / 1024 / 1024).toFixed(0),
+      usagePercent: ((usedMem / totalMem) * 100).toFixed(1),
+    },
+    cpuCores: os.cpus().length,
+    cpuModel: os.cpus()[0]?.model || 'VPS Virtual CPU',
+    nodeVersion: process.version,
+    discordJsVersion: require('discord.js').version || 'v14',
+    status: client.isReady() ? 'Online' : 'Reconnecting'
+  });
 });
 
 client.login(process.env.DISCORD_BOT_TOKEN);
