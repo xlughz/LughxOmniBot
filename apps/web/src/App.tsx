@@ -1,8 +1,9 @@
+import ServerSettings from './pages/ServerSettings';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import DashboardLayout from './layouts/DashboardLayout';
 import Dashboard from './pages/Dashboard';
-import Servers from './pages/Servers'; // 1. Import trang Servers mới tạo
+import Servers from './pages/Servers';
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
           
           {/* 2. Khai báo route cho trang Servers */}
           <Route path="servers" element={<Servers />} />
+          <Route path="servers/:id" element={<ServerSettings />} />
         </Route>
 
         {/* Nếu người dùng nhập link không tồn tại, tự động văng về trang chủ */}
