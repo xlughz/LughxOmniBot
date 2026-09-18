@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, Message } from 'discord.js';
 import { config } from 'dotenv';
 import { join } from 'path';
 import { prisma } from '@lughx/database';
+import express from 'express'; // Thêm Express cho Internal API
 
 // Nạp biến môi trường từ thư mục gốc
 config({ path: join(__dirname, '../../../.env') });
@@ -16,7 +17,24 @@ const client = new Client({
 
 const PREFIX = '!l';
 
-client.once('ready', () => {
+// --- Khởi tạo Internal API Server cho Bot ---
+const app = express();
+const INTERNAL_PORT = 5001;
+
+app.get('/internal/stats', (req, res) => {
+  res.json({
+    totalBots: 1, 
+    activeServers: client.guilds.cache.size, 
+    systemPing: client.ws.ping, 
+  });
+});
+
+app.listen(INTERNAL_PORT, () => {
+  console.log(`[BOT-INTERNAL] API noi bo dang chay tai cong ${INTERNAL_PORT}`);
+});
+// -------------------------------------------
+
+client.once('clientReady', () => {
   console.log(`[BOT] LughxOmniBot đã online với tư cách: ${client.user?.tag}`);
 });
 
