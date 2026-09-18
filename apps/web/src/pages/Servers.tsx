@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Users, LayoutGrid } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 export default function Servers() {
   const [servers, setServers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
 
   useEffect(() => {
     fetch('http://160.191.237.229:5000/api/servers', { credentials: 'include' })
@@ -37,24 +36,26 @@ export default function Servers() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {servers.map((server) => (
-              <div 
+              <Link 
                 key={server.id} 
-                onClick={() => navigate(`/dashboard/servers/${server.id}`)}
-                className="flex items-center gap-4 p-4 rounded-lg border border-border bg-background/50 hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer select-none"
+                to={`/dashboard/servers/${server.id}`}
+                className="block p-4 rounded-lg border border-border bg-background/50 hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer no-underline text-inherit"
               >
-                <img 
-                  src={server.icon || 'https://cdn.discordapp.com/embed/avatars/0.png'} 
-                  alt={server.name} 
-                  className="w-12 h-12 rounded-full border border-border bg-card shadow-sm object-cover"
-                />
-                <div className="flex-1 overflow-hidden">
-                  <h3 className="font-semibold text-sm truncate text-text">{server.name}</h3>
-                  <p className="text-xs text-muted flex items-center gap-1.5 mt-1">
-                    <Users size={12} className="text-primary/70" /> 
-                    {server.memberCount.toLocaleString()} thành viên
-                  </p>
+                <div className="flex items-center gap-4 pointer-events-none">
+                  <img 
+                    src={server.icon || 'https://cdn.discordapp.com/embed/avatars/0.png'} 
+                    alt={server.name} 
+                    className="w-12 h-12 rounded-full border border-border bg-card shadow-sm object-cover"
+                  />
+                  <div className="flex-1 overflow-hidden">
+                    <h3 className="font-semibold text-sm truncate text-text">{server.name}</h3>
+                    <p className="text-xs text-muted flex items-center gap-1.5 mt-1">
+                      <Users size={12} className="text-primary/70" /> 
+                      {server.memberCount?.toLocaleString() || 0} thành viên
+                    </p>
+                  </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         )}
