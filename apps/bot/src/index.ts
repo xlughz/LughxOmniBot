@@ -67,4 +67,21 @@ app.get('/internal/servers', (req, res) => {
   res.json(servers);
 });
 
+// Endpoint lấy thông tin chi tiết 1 server (bao gồm danh sách kênh chat)
+app.get('/internal/servers/:id', (req, res) => {
+  const guild = client.guilds.cache.get(req.params.id);
+  if (!guild) return res.status(404).json({ error: 'Bot không có trong server này' });
+  
+  const channels = guild.channels.cache
+    .filter(c => c.isTextBased())
+    .map(c => ({ id: c.id, name: c.name }));
+
+  res.json({
+    id: guild.id,
+    name: guild.name,
+    icon: guild.iconURL({ extension: 'png', size: 256 }),
+    channels // Trả về danh sách kênh chat
+  });
+});
+
 client.login(process.env.DISCORD_BOT_TOKEN);

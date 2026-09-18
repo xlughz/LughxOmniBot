@@ -33,3 +33,14 @@ model Session {
   expiresAt DateTime
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+model GuildConfig {
+  id               String   @id @default(cuid())
+  guildId          String   @unique
+  prefix           String   @default("!l")
+  welcomeChannelId String?
+  musicEnabled     Boolean  @default(true)
+  modEnabled       Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
