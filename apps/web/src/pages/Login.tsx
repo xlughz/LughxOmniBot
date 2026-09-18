@@ -2,7 +2,7 @@ import { Bot, Zap } from 'lucide-react';
 
 export default function Login() {
   const handleLogin = () => {
-    window.location.href = 'http://localhost:5000/api/auth/discord';
+    window.location.href = 'http://160.191.237.229:5000/api/auth/discord';
   };
 
   return (
