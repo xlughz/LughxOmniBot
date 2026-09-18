@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Bot, Server, Settings, LogOut, Loader2 } from 'lucide-react';
 
+const API_BASE_URL = 'http://160.191.237.229:5000';
+
 export default function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -16,19 +18,39 @@ export default function DashboardLayout() {
   ];
 
   useEffect(() => {
-    // Gọi API kiểm tra session khi vừa vào trang
-    fetch('http://localhost:5000/api/auth/me', { credentials: 'include' })
-      .then(res => res.json())
+    // Gọi API kiểm tra session qua IP VPS kèm Cookie
+    fetch(`${API_BASE_URL}/api/auth/me`, { 
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('Unauthorized');
+        return res.json();
+      })
       .then(data => {
-        if (data.success) {
+        if (data.success && data.user) {
           setUser(data.user);
         } else {
-          navigate('/'); // Chưa đăng nhập thì đuổi về trang chủ
+          navigate('/');
         }
       })
       .catch(() => navigate('/'))
       .finally(() => setLoading(false));
   }, [navigate]);
+
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API_BASE_URL}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (e) {
+      console.error(e);
+    }
+    navigate('/');
+  };
 
   if (loading) {
     return (
@@ -81,15 +103,12 @@ export default function DashboardLayout() {
               className="w-9 h-9 rounded-full border border-border bg-background"
             />
             <div className="overflow-hidden">
-              <p className="text-sm font-medium truncate">{user?.username}</p>
-              <p className="text-[11px] text-muted font-mono">{user?.role}</p>
+              <p className="text-sm font-medium truncate">{user?.username || 'User'}</p>
+              <p className="text-[11px] text-muted font-mono">{user?.role || 'Member'}</p>
             </div>
           </div>
           <button 
-            onClick={() => {
-              document.cookie = 'lughx_session=; Max-Age=0; path=/';
-              navigate('/');
-            }}
+            onClick={handleLogout}
             className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-sm font-medium text-red-400 hover:bg-red-400/10 transition-all border border-transparent hover:border-red-400/20"
           >
             <LogOut className="w-4 h-4" />
