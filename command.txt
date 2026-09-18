@@ -1,0 +1,15 @@
+Bot nhạc
+Bot game
+Bot welcome/leave
+Bot afk
+Bot room
+Bot dms
+Bot set role
+Bot time thue
+Bot banggia
+Bot noti
+Bot boost
+Bot auto rep
+update late...
+
+Tạo  web panel để quản lí cho dễ dàng

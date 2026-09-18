@@ -1,0 +1,12 @@
+{
+  "name": "@lughx/database",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@prisma/client": "^5.14.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.12.0"
+  }
+}
