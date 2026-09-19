@@ -1,11 +1,23 @@
-import { Client, GatewayIntentBits, Message } from 'discord.js';
+import { 
+  Client, 
+  GatewayIntentBits, 
+  Message, 
+  REST, 
+  Routes, 
+  Collection, 
+  Interaction 
+} from 'discord.js';
 import { config } from 'dotenv';
 import { join } from 'path';
 import { prisma } from '@lughx/database';
 import express from 'express';
 import os from 'os';
 
-// Nạp biến môi trường từ thư mục gốc
+// Import các modules lệnh
+import * as pingCmd from './commands/ping';
+import * as statsCmd from './commands/stats';
+import * as helpCmd from './commands/help';
+
 config({ path: join(__dirname, '../../../.env') });
 
 const client = new Client({
@@ -13,17 +25,21 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers, // Cần thiết để lắng nghe sự kiện guildMemberAdd
+    GatewayIntentBits.GuildMembers,
   ],
 });
 
-const PREFIX = '!l';
+const DEFAULT_PREFIX = '!l';
 
-// --- Khởi tạo Internal API Server cho Bot ---
+// Khởi tạo Collection lưu trữ Commands trong RAM của Bot
+const commands = new Collection<string, any>();
+const commandList = [pingCmd, statsCmd, helpCmd];
+commandList.forEach(cmd => commands.set(cmd.data.name, cmd));
+
+// --- Khởi tạo Internal API Server cho Bot (Cổng 5001) ---
 const app = express();
 const INTERNAL_PORT = 5001;
 
-// 1. Thống kê chi tiết tài nguyên hệ thống và bot
 app.get('/internal/stats', (req, res) => {
   const memoryUsage = process.memoryUsage();
   const totalMem = os.totalmem();
@@ -49,7 +65,6 @@ app.get('/internal/stats', (req, res) => {
   });
 });
 
-// 2. Danh sách toàn bộ server
 app.get('/internal/servers', (req, res) => {
   const servers = client.guilds.cache.map(guild => ({
     id: guild.id,
@@ -61,15 +76,12 @@ app.get('/internal/servers', (req, res) => {
   res.json(servers);
 });
 
-// 3. Chi tiết 1 server và danh sách kênh chat
 app.get('/internal/servers/:id', async (req, res) => {
   try {
     const guildId = req.params.id;
     const guild = client.guilds.cache.get(guildId) || await client.guilds.fetch(guildId).catch(() => null);
 
-    if (!guild) {
-      return res.status(404).json({ error: 'Bot không có trong server này' });
-    }
+    if (!guild) return res.status(404).json({ error: 'Bot không có trong server này' });
 
     const channelsMap = await guild.channels.fetch().catch(() => guild.channels.cache);
     const channels = channelsMap
@@ -85,48 +97,93 @@ app.get('/internal/servers/:id', async (req, res) => {
       channels,
     });
   } catch (error) {
-    console.error('[INTERNAL_SERVER_DETAIL_ERROR]', error);
     res.status(500).json({ error: 'Lỗi lấy dữ liệu server từ Bot' });
   }
 });
 
-// Bắt đầu lắng nghe sau khi đã đăng ký toàn bộ endpoints
 app.listen(INTERNAL_PORT, () => {
   console.log(`[BOT-INTERNAL] API noi bo dang chay tai cong ${INTERNAL_PORT}`);
 });
-// -------------------------------------------
 
-client.once('clientReady', () => {
+// --- Hàm Deploy Slash Commands (Ghi đè sạch sẽ danh sách lệnh) ---
+async function deploySlashCommands(clientId: string, token: string) {
+  const rest = new REST({ version: '10' }).setToken(token);
+  const slashData = commandList.map(cmd => cmd.data.toJSON());
+
+  try {
+    console.log('[SLASH] Đang đồng bộ danh sách Slash Commands lên Discord...');
+    // Ghi đè toàn bộ Global Commands (xóa sạch lệnh rác cũ)
+    await rest.put(
+      Routes.applicationCommands(clientId),
+      { body: slashData }
+    );
+    console.log(`[SLASH] Đồng bộ thành công ${slashData.length} lệnh Slash!`);
+  } catch (error) {
+    console.error('[SLASH_DEPLOY_ERROR] Lỗi khi deploy Slash Commands:', error);
+  }
+}
+
+client.once('clientReady', async () => {
   console.log(`[BOT] LughxOmniBot đã online với tư cách: ${client.user?.tag}`);
+
+  // Tự động deploy Slash commands ngay khi bot kết nối
+  if (client.user?.id && process.env.DISCORD_BOT_TOKEN) {
+    await deploySlashCommands(client.user.id, process.env.DISCORD_BOT_TOKEN);
+  }
 });
 
-// Xử lý lệnh theo Prefix động từ Database
+// --- 1. Xử lý Slash Commands (Interaction) ---
+client.on('interactionCreate', async (interaction: Interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+
+  const cmd = commands.get(interaction.commandName);
+  if (!cmd) return;
+
+  try {
+    await cmd.executeSlash(interaction);
+  } catch (err) {
+    console.error(`[COMMAND_ERROR] Lỗi khi chạy lệnh /${interaction.commandName}:`, err);
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp({ content: 'Đã có lỗi xảy ra khi thực thi lệnh này!', ephemeral: true });
+    } else {
+      await interaction.reply({ content: 'Đã có lỗi xảy ra khi thực thi lệnh này!', ephemeral: true });
+    }
+  }
+});
+
+// --- 2. Xử lý Prefix Commands (Message) ---
 client.on('messageCreate', async (message: Message) => {
   if (message.author.bot || !message.guild) return;
 
+  // Lấy prefix riêng của Guild từ Database
   const config = await prisma.guildConfig.findUnique({
     where: { guildId: message.guild.id },
   }).catch(() => null);
 
-  const currentPrefix = config?.prefix || PREFIX;
+  const currentPrefix = config?.prefix || DEFAULT_PREFIX;
 
   if (!message.content.startsWith(currentPrefix)) return;
 
   const args = message.content.slice(currentPrefix.length).trim().split(/ +/);
-  const command = args.shift()?.toLowerCase();
+  const commandName = args.shift()?.toLowerCase();
+  if (!commandName) return;
 
-  if (command === 'ping') {
-    const sent = await message.reply('Đang đo độ trễ...');
-    const latency = sent.createdTimestamp - message.createdTimestamp;
-    sent.edit(`Pong! Trễ mạng: \`${latency}ms\` | Discord API: \`${client.ws.ping}ms\``);
-  }
+  const cmd = commands.get(commandName);
+  if (!cmd) return;
 
-  if (command === 'help') {
-    message.reply(`**LughxOmniBot - Danh sách lệnh (Prefix: \`${currentPrefix}\`):**\n\`${currentPrefix}ping\` - Kiểm tra độ trễ mạng\n\`${currentPrefix}help\` - Xem bảng trợ giúp này`);
+  try {
+    if (commandName === 'help') {
+      await cmd.executePrefix(message, currentPrefix);
+    } else {
+      await cmd.executePrefix(message);
+    }
+  } catch (err) {
+    console.error(`[PREFIX_ERROR] Lỗi khi chạy lệnh ${currentPrefix}${commandName}:`, err);
+    message.reply('Đã xảy ra lỗi khi thực thi lệnh!');
   }
 });
 
-// Gửi tin nhắn chào mừng vào kênh đã cấu hình
+// --- 3. Welcome Member Event ---
 client.on('guildMemberAdd', async (member) => {
   try {
     const config = await prisma.guildConfig.findUnique({
