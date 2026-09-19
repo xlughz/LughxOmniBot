@@ -281,6 +281,7 @@ export async function playTrackLogic(voiceChannel: any, textChannelId: string, q
   }
 }
 
+// Sửa lại hàm executeSlash để defer an toàn không crash
 export async function executeSlash(interaction: ChatInputCommandInteraction) {
   const member = interaction.member as GuildMember;
   const voiceChannel = member?.voice?.channel;
@@ -297,10 +298,10 @@ export async function executeSlash(interaction: ChatInputCommandInteraction) {
     return interaction.reply({ content: '⌁ Bạn cần tham gia một kênh Voice trước khi phát nhạc!', ephemeral: true });
   }
 
-  await interaction.deferReply();
+  await interaction.deferReply({ ephemeral: true });
   try {
     await playTrackLogic(voiceChannel, interaction.channelId || '', query, interaction.user);
-    return interaction.deleteReply().catch(() => null);
+    return interaction.editReply({ content: '✦ Đang nạp và phát nhạc qua Lavalink v4...' });
   } catch (err: any) {
     console.error('[PLAY_ERROR]', err);
     return interaction.editReply({ content: '⚠️ Lỗi phát nhạc: `' + (err.message || 'Lỗi không xác định') + '`' });
