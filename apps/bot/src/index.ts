@@ -14,7 +14,7 @@ import { prisma } from '@lughx/database';
 import express from 'express';
 import os from 'os';
 
-// Tích hợp Shoukaku (Lavalink Engine chuẩn PrimeMusic)
+// Tích hợp Shoukaku Lavalink Client
 import { Shoukaku, Connectors } from 'shoukaku';
 
 // Import các modules lệnh
@@ -195,23 +195,23 @@ client.on('interactionCreate', async (interaction: Interaction) => {
       case 'music_pause_resume':
         if (q.player.paused) {
           await q.player.setPaused(false);
-          await interaction.reply({ content: '⏵ Đã tiếp tục phát nhạc!', ephemeral: true });
+          await interaction.reply({ content: '▶️ Đã tiếp tục phát nhạc!', ephemeral: true });
         } else {
           await q.player.setPaused(true);
-          await interaction.reply({ content: '⏸ Đã tạm dừng phát nhạc!', ephemeral: true });
+          await interaction.reply({ content: '⏸️ Đã tạm dừng phát nhạc!', ephemeral: true });
         }
         break;
 
       case 'music_skip':
         await q.player.stopTrack();
-        await interaction.reply({ content: '⏭ Đã chuyển sang bài tiếp theo!', ephemeral: true });
+        await interaction.reply({ content: '⏭️ Đã chuyển sang bài tiếp theo!', ephemeral: true });
         break;
 
       case 'music_loop': {
         const next = q.loopMode === 'off' ? 'single' : q.loopMode === 'single' ? 'all' : 'off';
         q.loopMode = next;
         const text = next === 'off' ? 'Tắt' : next === 'single' ? 'Lặp 1 bài' : 'Lặp toàn bộ';
-        await interaction.reply({ content: '𝄪 Chế độ lặp: **' + text + '**', ephemeral: true });
+        await interaction.reply({ content: '🔁 Chế độ lặp: **' + text + '**', ephemeral: true });
         break;
       }
 
@@ -221,14 +221,14 @@ client.on('interactionCreate', async (interaction: Interaction) => {
           await shoukaku.leaveVoiceChannel(interaction.guildId);
           musicQueues.delete(interaction.guildId);
         }
-        await interaction.reply({ content: '⏹ Đã ngắt kết nối kênh thoại!', ephemeral: true });
+        await interaction.reply({ content: '⏹️ Đã ngắt kết nối kênh thoại!', ephemeral: true });
         break;
 
       case 'music_vol_up': {
         const newVol = Math.min(q.volume + 10, 150);
         q.volume = newVol;
         await q.player.setFilterVolume(newVol / 100);
-        await interaction.reply({ content: '▷ Đã tăng âm lượng lên: **' + newVol + '%**', ephemeral: true });
+        await interaction.reply({ content: '🔊 Đã tăng âm lượng lên: **' + newVol + '%**', ephemeral: true });
         break;
       }
 
@@ -236,19 +236,19 @@ client.on('interactionCreate', async (interaction: Interaction) => {
         const newVol = Math.max(q.volume - 10, 10);
         q.volume = newVol;
         await q.player.setFilterVolume(newVol / 100);
-        await interaction.reply({ content: '◁ Đã giảm âm lượng xuống: **' + newVol + '%**', ephemeral: true });
+        await interaction.reply({ content: '🔉 Đã giảm âm lượng xuống: **' + newVol + '%**', ephemeral: true });
         break;
       }
 
       case 'music_shuffle':
         q.queue.sort(() => Math.random() - 0.5);
-        await interaction.reply({ content: '𖦹 Đã xáo trộn danh sách bài hát!', ephemeral: true });
+        await interaction.reply({ content: '🔀 Đã xáo trộn danh sách bài hát!', ephemeral: true });
         break;
 
       case 'music_queue': {
         const items = q.queue.slice(0, 5).map((t, idx) => (idx + 1) + '. **' + t.info.title + '**').join('\n');
         await interaction.reply({
-          content: '✦ **Hàng Đợi Hiện Tại (' + q.queue.length + ' bài):**\n' + (items || '*Trống*'),
+          content: '📜 **Hàng Đợi Hiện Tại (' + q.queue.length + ' bài):**\n' + (items || '*Trống*'),
           ephemeral: true,
         });
         break;

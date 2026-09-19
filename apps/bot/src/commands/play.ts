@@ -41,25 +41,28 @@ function createProgressBar(currentMs: number, totalMs: number, barLength = 16) {
 }
 
 export function createMusicEmbed(track?: any, isPlaying = true, queueObj?: any) {
+  const defaultIcon = 'https://cdn.discordapp.com/embed/avatars/0.png';
+  const botIcon = client.user?.displayAvatarURL() || defaultIcon;
+
   const embed = new EmbedBuilder()
     .setColor(0x18181b)
     .setFooter({ 
       text: '✦ LUGHX SOUND SYSTEM ✦ HI-RES LAVALINK AUDIO ✦', 
-      iconURL: client.user?.displayAvatarURL() || 'https://cdn.discordapp.com/embed/avatars/0.png'
+      iconURL: botIcon
     });
 
   if (track && queueObj) {
     const currentMs = queueObj.player?.position || 0;
     const totalMs = track.length || 1;
     const progressBar = createProgressBar(currentMs, totalMs);
-    const loopStatus = queueObj.loopMode === 'single' ? '𝄪 Single' : queueObj.loopMode === 'all' ? '𝄪 All' : 'Off';
-    const playState = isPlaying ? '⏵ PLAYING' : '⏸ PAUSED';
+    const loopStatus = queueObj.loopMode === 'single' ? 'Single' : queueObj.loopMode === 'all' ? 'All' : 'Off';
+    const playState = isPlaying ? '▶️ PLAYING' : '⏸️ PAUSED';
     const artistName = track.author || 'Unknown Artist';
 
     embed
       .setTitle('♫ 「 ' + (track.title || 'Unknown Track') + ' 」')
       .setURL(track.uri || 'https://discord.com')
-      .setThumbnail(track.artworkUrl || client.user?.displayAvatarURL() || 'https://cdn.discordapp.com/embed/avatars/0.png')
+      .setThumbnail(track.artworkUrl || botIcon)
       .setDescription(
         '```text\n' + progressBar + ' [' + formatTime(currentMs) + ' / ' + formatTime(totalMs) + ']\n```'
       )
@@ -74,7 +77,7 @@ export function createMusicEmbed(track?: any, isPlaying = true, queueObj?: any) 
     embed
       .setTitle('𝄞 LUGHX AUDIO ENGINE')
       .setDescription(
-        '```ansi\n\u001b[0;37m✦ TRẠNG THÁI: \u001b[0;32m[IDLE]\u001b[0m\nChưa có nguồn âm thanh. Nhấn [ ⌕ Nhập Nguồn ] bên dưới để bắt đầu.\n```'
+        '```ansi\n\u001b[0;37m✦ TRẠNG THÁI: \u001b[0;32m[IDLE]\u001b[0m\nChưa có nguồn âm thanh. Nhấn [ 🔍 Nhập Nguồn ] bên dưới để bắt đầu.\n```'
       )
       .addFields(
         { name: '⟡ Hỗ Trợ Đa Nguồn', value: '`Spotify` ─ `SoundCloud` ─ `YouTube` ─ `Apple Music`', inline: false }
@@ -89,30 +92,30 @@ export function createMusicControls(hasPlayer = false) {
     new ButtonBuilder()
       .setCustomId('music_add_modal')
       .setLabel('Nhập Nguồn')
-      .setEmoji('⌕')
+      .setEmoji('🔍')
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId('music_pause_resume')
       .setLabel('Phát / Dừng')
-      .setEmoji('⏯')
+      .setEmoji('⏯️')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!hasPlayer),
     new ButtonBuilder()
       .setCustomId('music_skip')
       .setLabel('Bỏ Qua')
-      .setEmoji('⏭')
+      .setEmoji('⏭️')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!hasPlayer),
     new ButtonBuilder()
       .setCustomId('music_loop')
       .setLabel('Lặp')
-      .setEmoji('𝄪')
+      .setEmoji('🔁')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!hasPlayer),
     new ButtonBuilder()
       .setCustomId('music_stop')
       .setLabel('Ngắt')
-      .setEmoji('⏹')
+      .setEmoji('⏹️')
       .setStyle(ButtonStyle.Danger)
       .setDisabled(!hasPlayer)
   );
@@ -121,25 +124,25 @@ export function createMusicControls(hasPlayer = false) {
     new ButtonBuilder()
       .setCustomId('music_vol_down')
       .setLabel('Vol -')
-      .setEmoji('◁')
+      .setEmoji('🔉')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!hasPlayer),
     new ButtonBuilder()
       .setCustomId('music_vol_up')
       .setLabel('Vol +')
-      .setEmoji('▷')
+      .setEmoji('🔊')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!hasPlayer),
     new ButtonBuilder()
       .setCustomId('music_queue')
       .setLabel('Hàng Đợi')
-      .setEmoji('✦')
+      .setEmoji('📜')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!hasPlayer),
     new ButtonBuilder()
       .setCustomId('music_shuffle')
       .setLabel('Trộn Bài')
-      .setEmoji('𖦹')
+      .setEmoji('🔀')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!hasPlayer)
   );
@@ -215,7 +218,6 @@ export async function playTrackLogic(voiceChannel: any, textChannelId: string, q
     };
     musicQueues.set(voiceChannel.guild.id, queueObj);
 
-    // Bắt sự kiện khi bài hát kết thúc
     player.on('end', async () => {
       const q = musicQueues.get(voiceChannel.guild.id);
       if (!q) return;
@@ -234,7 +236,7 @@ export async function playTrackLogic(voiceChannel: any, textChannelId: string, q
         if (ch) {
           const embed = createMusicEmbed(next.info, true, q);
           const controls = createMusicControls(true);
-          ch.send({ embeds: [embed], components: controls });
+          await ch.send({ embeds: [embed], components: controls });
         }
       } else {
         q.currentTrack = null;
@@ -250,7 +252,6 @@ export async function playTrackLogic(voiceChannel: any, textChannelId: string, q
     });
   }
 
-  // Đưa track vào hàng đợi
   if (result.loadType === 'search') {
     queueObj.queue.push(tracks[0]);
   } else {
@@ -259,15 +260,11 @@ export async function playTrackLogic(voiceChannel: any, textChannelId: string, q
     }
   }
 
-  // Nếu hiện tại chưa có bài hát nào đang phát -> Bắt đầu phát ngay
   if (!queueObj.currentTrack) {
     const first = queueObj.queue.shift();
     queueObj.currentTrack = first;
-    
-    // Gửi lệnh play đến Lavalink v4
     await queueObj.player.playTrack({ track: { encoded: first.encoded } });
 
-    // Gửi Embed giao diện điều khiển ra kênh chat
     const ch = client.channels.cache.get(textChannelId) as any;
     if (ch) {
       const embed = createMusicEmbed(first.info, true, queueObj);
