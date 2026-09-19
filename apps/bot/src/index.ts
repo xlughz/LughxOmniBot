@@ -5,7 +5,8 @@ import {
   Collection, 
   Events, 
   REST, 
-  Routes 
+  Routes,
+  ChannelType 
 } from 'discord.js';
 import express from 'express';
 import dotenv from 'dotenv';
@@ -35,7 +36,7 @@ const client = new Client({
 export const commands = new Collection<string, any>();
 const commandsArray: any[] = [];
 
-// 1. Quét nạp tự động toàn bộ lệnh trong thư mục commands
+// 1. Quét nạp tự động toàn bộ lệnh trong thư mục commands (bỏ qua file liên quan đến play)
 const commandsPath = path.join(__dirname, 'commands');
 if (fs.existsSync(commandsPath)) {
   const commandFiles = fs.readdirSync(commandsPath).filter(file => 
@@ -57,26 +58,37 @@ if (fs.existsSync(commandsPath)) {
   }
 }
 
-// 2. Đồng bộ Slash Commands lên Discord Gateway khi sẵn sàng
+// 2. Tự động dọn sạch lệnh cũ và đồng bộ đè danh sách lệnh mới lên Discord
 client.once(Events.ClientReady, async (readyClient) => {
-  console.log(`[BOT] LughxOmniBot đã online với tư cách: ${readyClient.user.tag}`);
+  console.log(`[BOT] LughxOmniBot đã online: ${readyClient.user.tag}`);
 
   setTimeout(async () => {
     const rest = new REST({ version: '10' }).setToken(token);
     try {
-      console.log(`[SLASH] Đang đồng bộ ${commandsArray.length} Slash Commands...`);
+      console.log('[SLASH] Bắt đầu đồng bộ danh sách Slash Commands...');
+
+      // Ghi đè toàn bộ Global Commands bằng danh sách hiện tại (ping, stats, help)
       await rest.put(
         Routes.applicationCommands(readyClient.user.id),
         { body: commandsArray }
       );
-      console.log('[SLASH] Đồng bộ Slash Commands thành công!');
+
+      // Dọn sạch Guild Commands rác trên từng Server (nguyên nhân gây treo /lplay)
+      for (const [guildId] of readyClient.guilds.cache) {
+        await rest.put(
+          Routes.applicationGuildCommands(readyClient.user.id, guildId),
+          { body: [] }
+        ).catch(() => {});
+      }
+
+      console.log('[SLASH] Đã dọn sạch lệnh cũ và cập nhật Slash Commands thành công!');
     } catch (error) {
       console.error('[SLASH_ERROR] Lỗi đồng bộ Slash Commands:', error);
     }
-  }, 2000);
+  }, 2500);
 });
 
-// 3. Xử lý Interaction
+// 3. Xử lý khi người dùng gõ lệnh Slash
 client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isChatInputCommand()) {
     const command = commands.get(interaction.commandName);
@@ -106,7 +118,7 @@ client.login(token);
 const app = express();
 app.use(express.json());
 
-// Health Check
+// Endpoint Health Check
 app.get(['/api/health', '/internal/health'], (req, res) => {
   res.json({
     status: 'ok',
@@ -118,7 +130,7 @@ app.get(['/api/health', '/internal/health'], (req, res) => {
   });
 });
 
-// Thống kê chi tiết Realtime (RAM Bot, RAM VPS, Uptime, Ping, Server/User)
+// Endpoint thống kê tài nguyên (RAM, VPS, Uptime)
 const handleStats = (req: any, res: any) => {
   let totalMembers = 0;
   client.guilds.cache.forEach(g => { totalMembers += (g.memberCount || 0); });
@@ -141,18 +153,12 @@ const handleStats = (req: any, res: any) => {
     online: true,
     isReady: true,
     tag: client.user?.tag || null,
-
-    // Ping
     systemPing: currentPing,
     ping: currentPing,
     wsPing: currentPing,
-
-    // Uptime
     uptime: uptimeSec,
     botUptime: uptimeSec,
     uptimeMs: client.uptime || (uptimeSec * 1000),
-
-    // Server & User counts
     totalServers: client.guilds.cache.size,
     activeServers: client.guilds.cache.size,
     guilds: client.guilds.cache.size,
@@ -160,16 +166,12 @@ const handleStats = (req: any, res: any) => {
     totalUsers: totalMembers,
     users: totalMembers,
     memberCount: totalMembers,
-
-    // RAM của Bot
     botRamMB: botRamMB,
     ramMB: botRamMB,
     memoryUsage: botRamMB,
     ram: botRamMB,
     heapUsed: botRamMB,
     heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
-
-    // RAM Hệ thống VPS (Khớp chuẩn các key của BotCluster.tsx)
     systemMemory: {
       usagePercent: sysPercent,
       usedMB: usedMB,
@@ -181,7 +183,6 @@ const handleStats = (req: any, res: any) => {
     systemRamPercent: sysPercent,
     systemRamUsed: usedMB,
     systemRamTotal: totalMB,
-
     shardId: 0,
     shardStatus: 'online',
   });
@@ -190,7 +191,7 @@ const handleStats = (req: any, res: any) => {
 app.get('/internal/stats', handleStats);
 app.get('/api/stats', handleStats);
 
-// Danh sách Guilds
+// Endpoint danh sách server
 const handleServers = (req: any, res: any) => {
   const list = client.guilds.cache.map(g => ({
     id: g.id,
@@ -204,22 +205,47 @@ const handleServers = (req: any, res: any) => {
 app.get('/internal/servers', handleServers);
 app.get('/api/guilds', handleServers);
 
-// Chi tiết Guild
-app.get('/internal/servers/:id', (req, res) => {
-  const guild = client.guilds.cache.get(req.params.id);
-  if (!guild) {
-    return res.status(404).json({ error: 'Server không tìm thấy' });
-  }
+// Endpoint chi tiết 1 server: Fetch trực tiếp kênh văn bản để đổ vào dropdown Kênh Chào Mừng
+app.get('/internal/servers/:id', async (req, res) => {
+  try {
+    const guildId = req.params.id;
+    const guild = client.guilds.cache.get(guildId) || await client.guilds.fetch(guildId).catch(() => null);
 
-  res.json({
-    id: guild.id,
-    name: guild.name,
-    icon: guild.iconURL(),
-    memberCount: guild.memberCount,
-    channelsCount: guild.channels.cache.size,
-    rolesCount: guild.roles.cache.size,
-    joinedTimestamp: guild.joinedTimestamp,
-  });
+    if (!guild) {
+      return res.status(404).json({ error: 'Server không tìm thấy' });
+    }
+
+    // Fetch toàn bộ channels từ Discord API nếu cache rỗng
+    const fetchedChannels = await guild.channels.fetch().catch(() => guild.channels.cache);
+
+    const textChannels: any[] = [];
+    fetchedChannels.forEach((channel: any) => {
+      // ChannelType.GuildText có giá trị enum là 0
+      if (channel && (channel.type === 0 || channel.type === ChannelType.GuildText)) {
+        textChannels.push({
+          id: channel.id,
+          name: channel.name,
+          position: channel.position ?? 0,
+        });
+      }
+    });
+
+    textChannels.sort((a, b) => a.position - b.position);
+
+    res.json({
+      id: guild.id,
+      name: guild.name,
+      icon: guild.iconURL(),
+      memberCount: guild.memberCount,
+      channelsCount: textChannels.length,
+      rolesCount: guild.roles.cache.size,
+      joinedTimestamp: guild.joinedTimestamp,
+      channels: textChannels, // Danh sách text channels đã sẵn sàng cho Frontend
+    });
+  } catch (error) {
+    console.error('[SERVER_DETAIL_ERROR]', error);
+    res.status(500).json({ error: 'Lỗi khi lấy thông tin máy chủ' });
+  }
 });
 
 const PORT = process.env.BOT_INTERNAL_PORT || 5001;
