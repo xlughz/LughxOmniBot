@@ -169,7 +169,7 @@ export function createMusicModal() {
 
 // Hàm lõi xử lý phát nhạc qua Shoukaku
 export async function playTrackLogic(voiceChannel: any, textChannelId: string, query: string, user: User) {
-  const node = shoukaku.options.nodeResolver(shoukaku.nodes);
+  const node = shoukaku.nodes.get('lughx-lavalink') || Array.from(shoukaku.nodes.values())[0];
   if (!node) throw new Error('Không có kết nối Lavalink Node sẵn sàng');
 
   const isUrl = /^https?:\/\//.test(query);
