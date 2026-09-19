@@ -35,7 +35,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildVoiceStates, // Bắt buộc để bot kết nối Voice và stream nhạc
+    GatewayIntentBits.GuildVoiceStates,
   ],
 });
 
@@ -56,7 +56,7 @@ const distube = new DisTube(client, {
   ],
 });
 
-// Tự động phát sinh Embed Controller khi bài hát mới bắt đầu phát
+// Sự kiện phát nhạc mới
 (distube as any).on('playSong', (queue: any, song: any) => {
   const embed = playCmd.createMusicEmbed(song, true, queue);
   const components = playCmd.createMusicControls(true);
@@ -78,7 +78,6 @@ const distube = new DisTube(client, {
 const app = express();
 const INTERNAL_PORT = 5001;
 
-// 1. Thống kê chi tiết tài nguyên hệ thống và bot
 app.get('/internal/stats', (req, res) => {
   const memoryUsage = process.memoryUsage();
   const totalMem = os.totalmem();
@@ -104,7 +103,6 @@ app.get('/internal/stats', (req, res) => {
   });
 });
 
-// 2. Danh sách toàn bộ server
 app.get('/internal/servers', (req, res) => {
   const servers = client.guilds.cache.map(guild => ({
     id: guild.id,
@@ -116,7 +114,6 @@ app.get('/internal/servers', (req, res) => {
   res.json(servers);
 });
 
-// 3. Chi tiết 1 server và danh sách kênh chat
 app.get('/internal/servers/:id', async (req, res) => {
   try {
     const guildId = req.params.id;
@@ -143,22 +140,32 @@ app.get('/internal/servers/:id', async (req, res) => {
   }
 });
 
-// Lắng nghe cổng nội bộ
 app.listen(INTERNAL_PORT, () => {
   console.log(`[BOT-INTERNAL] API nội bộ đang chạy tại cổng ${INTERNAL_PORT}`);
 });
 
-// --- Hàm Deploy Slash Commands lên Discord Gateway ---
+// --- Triển khai đồng bộ Slash Commands tức thời cho tất cả Guild ---
 async function deploySlashCommands(clientId: string, token: string) {
   const rest = new REST({ version: '10' }).setToken(token);
   const slashData = commandList.map(cmd => cmd.data.toJSON());
 
   try {
-    console.log('[SLASH] Đang đồng bộ danh sách Slash Commands lên Discord...');
+    console.log('[SLASH] Đang đồng bộ danh sách Slash Commands lên Discord Gateway...');
+    
+    // 1. Cập nhật Global
     await rest.put(
       Routes.applicationCommands(clientId),
       { body: slashData }
     );
+
+    // 2. Cập nhật trực tiếp tức thì từng Guild
+    for (const guild of client.guilds.cache.values()) {
+      await rest.put(
+        Routes.applicationGuildCommands(clientId, guild.id),
+        { body: slashData }
+      ).catch(() => null);
+    }
+
     console.log(`[SLASH] Đồng bộ thành công ${slashData.length} lệnh Slash!`);
   } catch (error) {
     console.error('[SLASH_DEPLOY_ERROR] Lỗi khi deploy Slash Commands:', error);
@@ -173,9 +180,9 @@ client.once('clientReady', async () => {
   }
 });
 
-// --- Lắng nghe các tương tác (Slash Commands, Buttons, Modals) ---
+// --- Lắng nghe các tương tác (Buttons, Modals, Slash Commands) ---
 client.on('interactionCreate', async (interaction: Interaction) => {
-  // 1. Tương tác Nút bấm trên Music Controller
+  // 1. Nút bấm trên bảng điều khiển nhạc
   if (interaction.isButton()) {
     const queue = distube.getQueue(interaction.guildId!);
 
@@ -201,7 +208,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 
       case 'music_skip':
         await distube.skip(interaction.guildId!).catch(() => distube.stop(interaction.guildId!));
-        await interaction.reply({ content: '⏭ Đã chuyển bài tiếp theo!', ephemeral: true });
+        await interaction.reply({ content: '⏭ Đã chuyển sang bài tiếp theo!', ephemeral: true });
         break;
 
       case 'music_loop': {
@@ -213,7 +220,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 
       case 'music_stop':
         distube.stop(interaction.guildId!);
-        await interaction.reply({ content: '⏹ Đã dừng phát nhạc và rời kênh voice!', ephemeral: true });
+        await interaction.reply({ content: '⏹ Đã dừng phát nhạc và rời kênh thoại!', ephemeral: true });
         break;
 
       case 'music_vol_up': {
@@ -232,7 +239,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 
       case 'music_shuffle':
         await distube.shuffle(interaction.guildId!);
-        await interaction.reply({ content: '𖦹 Đã xáo trộn danh sách phát!', ephemeral: true });
+        await interaction.reply({ content: '𖦹 Đã xáo trộn danh sách bài hát!', ephemeral: true });
         break;
 
       case 'music_queue': {
@@ -250,7 +257,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     return;
   }
 
-  // 2. Tương tác gửi Form Modal nạp nhạc
+  // 2. Nhận Form Modal dán link / tìm bài hát
   if (interaction.isModalSubmit()) {
     if (interaction.customId === 'music_link_modal') {
       const query = interaction.fields.getTextInputValue('music_query_input');
@@ -262,11 +269,15 @@ client.on('interactionCreate', async (interaction: Interaction) => {
       }
 
       await interaction.deferReply({ ephemeral: true });
-      await distube.play(voiceChannel, query, {
-        member,
-        textChannel: interaction.channel as any,
-      });
-      await interaction.editReply({ content: `✦ Đã nạp thành công yêu cầu: \`${query}\`` });
+      try {
+        await distube.play(voiceChannel, query, {
+          member,
+          textChannel: interaction.channel as any,
+        });
+        await interaction.editReply({ content: `✦ Đã nạp thành công yêu cầu: \`${query}\`` });
+      } catch (err: any) {
+        await interaction.editReply({ content: `⚠️ Không thể nạp bài hát: ${err.message || 'Lỗi không xác định'}` });
+      }
     }
     return;
   }
@@ -278,7 +289,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 
     try {
       if (interaction.commandName === 'lplay') {
-        await cmd.executeSlash(interaction, distube);
+        await cmd.executeSlash(interaction as any, distube);
       } else {
         await cmd.executeSlash(interaction);
       }
