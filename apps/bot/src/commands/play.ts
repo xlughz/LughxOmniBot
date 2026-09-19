@@ -10,8 +10,9 @@ import {
   TextInputBuilder, 
   TextInputStyle, 
   GuildMember, 
-  PermissionsBitField 
+  User
 } from 'discord.js';
+import { client, shoukaku, musicQueues } from '../index';
 
 export const data = new SlashCommandBuilder()
   .setName('lplay')
@@ -22,49 +23,52 @@ export const data = new SlashCommandBuilder()
       .setRequired(false)
   );
 
-// Thanh tiến trình Minimalist dạng typography phẳng
-function createProgressBar(currentSeconds: number, totalSeconds: number, barLength = 16) {
-  if (!totalSeconds || totalSeconds === 0) return '━'.repeat(barLength);
-  const progress = Math.min(Math.max(currentSeconds / totalSeconds, 0), 1);
+function formatTime(ms: number) {
+  if (!ms || isNaN(ms)) return '00:00';
+  const minutes = Math.floor(ms / 60000);
+  const seconds = Math.floor((ms % 60000) / 1000);
+  return minutes.toString().padStart(2, '0') + ':' + seconds.toString().padStart(2, '0');
+}
+
+function createProgressBar(currentMs: number, totalMs: number, barLength = 16) {
+  if (!totalMs || totalMs === 0) return '━'.repeat(barLength);
+  const progress = Math.min(Math.max(currentMs / totalMs, 0), 1);
   const progressIndex = Math.round(barLength * progress);
   
   const filled = '━'.repeat(Math.max(0, progressIndex - 1));
   const empty = '─'.repeat(Math.max(0, barLength - progressIndex));
-  return `${filled}◉${empty}`;
+  return filled + '◉' + empty;
 }
 
-// Embed giao diện điều khiển Minimal Premium
-export function createMusicEmbed(song?: any, isPlaying = true, queue?: any) {
+export function createMusicEmbed(track?: any, isPlaying = true, queueObj?: any) {
   const embed = new EmbedBuilder()
     .setColor(0x18181b)
     .setFooter({ 
-      text: '✦ LUGHX SOUND SYSTEM ✦ HI-RES AUDIO ✦', 
+      text: '✦ LUGHX SOUND SYSTEM ✦ HI-RES LAVALINK AUDIO ✦', 
       iconURL: 'https://cdn.discordapp.com/embed/avatars/0.png' 
     });
 
-  if (song && queue) {
-    const currentSec = queue.currentTime || 0;
-    const totalSec = song.duration || 1;
-    const progressBar = createProgressBar(currentSec, totalSec);
-    const loopStatus = queue.repeatMode === 1 ? '𝄪 Single' : queue.repeatMode === 2 ? '𝄪 All' : 'Off';
+  if (track && queueObj) {
+    const currentMs = queueObj.player?.position || 0;
+    const totalMs = track.length || 1;
+    const progressBar = createProgressBar(currentMs, totalMs);
+    const loopStatus = queueObj.loopMode === 'single' ? '𝄪 Single' : queueObj.loopMode === 'all' ? '𝄪 All' : 'Off';
     const playState = isPlaying ? '⏵ PLAYING' : '⏸ PAUSED';
-    const sourceName = (song.source || 'WEB').toUpperCase();
-    const artistName = song.uploader?.name || song.uploader || 'Unknown Artist';
+    const artistName = track.author || 'Unknown Artist';
 
     embed
-      .setTitle(`♫ 「 ${song.name || 'Unknown Track'} 」`)
-      .setURL(song.url || 'https://discord.com')
-      .setThumbnail(song.thumbnail || 'https://cdn.discordapp.com/embed/avatars/0.png')
+      .setTitle('♫ 「 ' + (track.title || 'Unknown Track') + ' 」')
+      .setURL(track.uri || 'https://discord.com')
+      .setThumbnail('https://cdn.discordapp.com/embed/avatars/0.png')
       .setDescription(
-        `\`\`\`text\n${progressBar} [${queue.formattedCurrentTime || '00:00'} / ${song.formattedDuration || '00:00'}]\`\`\``
+        '```text\n' + progressBar + ' [' + formatTime(currentMs) + ' / ' + formatTime(totalMs) + ']\n```'
       )
       .addFields(
-        { name: '✦ Artist', value: `\`${artistName}\``, inline: true },
-        { name: '✦ Request', value: `${song.user || 'Unknown'}`, inline: true },
-        { name: '✦ Platform', value: `\`${sourceName}\``, inline: true },
-        { name: '✦ Volume', value: `\`${queue.volume || 100}%\``, inline: true },
-        { name: '✦ Repeat', value: `\`${loopStatus}\``, inline: true },
-        { name: '✦ Status', value: `\`${playState}\``, inline: true }
+        { name: '✦ Artist', value: '`' + artistName + '`', inline: true },
+        { name: '✦ Platform', value: '`Lavalink v4`', inline: true },
+        { name: '✦ Volume', value: '`' + (queueObj.volume || 100) + '%`', inline: true },
+        { name: '✦ Repeat', value: '`' + loopStatus + '`', inline: true },
+        { name: '✦ Status', value: '`' + playState + '`', inline: true }
       );
   } else {
     embed
@@ -80,8 +84,7 @@ export function createMusicEmbed(song?: any, isPlaying = true, queue?: any) {
   return embed;
 }
 
-// Bộ nút bấm điều khiển
-export function createMusicControls(hasQueue = false) {
+export function createMusicControls(hasPlayer = false) {
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId('music_add_modal')
@@ -93,25 +96,25 @@ export function createMusicControls(hasQueue = false) {
       .setLabel('Phát / Dừng')
       .setEmoji('⏯')
       .setStyle(ButtonStyle.Secondary)
-      .setDisabled(!hasQueue),
+      .setDisabled(!hasPlayer),
     new ButtonBuilder()
       .setCustomId('music_skip')
       .setLabel('Bỏ Qua')
       .setEmoji('⏭')
       .setStyle(ButtonStyle.Secondary)
-      .setDisabled(!hasQueue),
+      .setDisabled(!hasPlayer),
     new ButtonBuilder()
       .setCustomId('music_loop')
       .setLabel('Lặp')
       .setEmoji('𝄪')
       .setStyle(ButtonStyle.Secondary)
-      .setDisabled(!hasQueue),
+      .setDisabled(!hasPlayer),
     new ButtonBuilder()
       .setCustomId('music_stop')
       .setLabel('Ngắt')
       .setEmoji('⏹')
       .setStyle(ButtonStyle.Danger)
-      .setDisabled(!hasQueue)
+      .setDisabled(!hasPlayer)
   );
 
   const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -120,31 +123,30 @@ export function createMusicControls(hasQueue = false) {
       .setLabel('Vol -')
       .setEmoji('◁')
       .setStyle(ButtonStyle.Secondary)
-      .setDisabled(!hasQueue),
+      .setDisabled(!hasPlayer),
     new ButtonBuilder()
       .setCustomId('music_vol_up')
       .setLabel('Vol +')
       .setEmoji('▷')
       .setStyle(ButtonStyle.Secondary)
-      .setDisabled(!hasQueue),
+      .setDisabled(!hasPlayer),
     new ButtonBuilder()
       .setCustomId('music_queue')
       .setLabel('Hàng Đợi')
       .setEmoji('✦')
       .setStyle(ButtonStyle.Secondary)
-      .setDisabled(!hasQueue),
+      .setDisabled(!hasPlayer),
     new ButtonBuilder()
       .setCustomId('music_shuffle')
       .setLabel('Trộn Bài')
       .setEmoji('𖦹')
       .setStyle(ButtonStyle.Secondary)
-      .setDisabled(!hasQueue)
+      .setDisabled(!hasPlayer)
   );
 
   return [row1, row2];
 }
 
-// Popup Modal nhập link hoặc từ khóa
 export function createMusicModal() {
   const modal = new ModalBuilder()
     .setCustomId('music_link_modal')
@@ -152,8 +154,8 @@ export function createMusicModal() {
 
   const input = new TextInputBuilder()
     .setCustomId('music_query_input')
-    .setLabel('URL (Spotify / YT / SoundCloud) hoặc Tên Bài Hát')
-    .setPlaceholder('Ví dụ: https://open.spotify.com/... hoặc Tên bài hát')
+    .setLabel('URL hoặc Tên Bài Hát')
+    .setPlaceholder('https://... hoặc Tên bài hát')
     .setStyle(TextInputStyle.Short)
     .setRequired(true);
 
@@ -162,66 +164,119 @@ export function createMusicModal() {
   return modal;
 }
 
-// Thực thi Slash Command /lplay
-export async function executeSlash(interaction: ChatInputCommandInteraction, distube: any) {
+// Hàm lõi xử lý phát nhạc qua Shoukaku
+export async function playTrackLogic(voiceChannel: any, textChannelId: string, query: string, user: User) {
+  const node = shoukaku.options.nodeResolver(shoukaku.nodes);
+  if (!node) throw new Error('Không có kết nối Lavalink Node sẵn sàng');
+
+  const isUrl = /^https?:\/\//.test(query);
+  const searchPattern = isUrl ? query : 'ytsearch:' + query;
+  const result = await node.rest.resolve(searchPattern);
+
+  if (!result || !result.data) throw new Error('Không tìm thấy bài hát yêu cầu');
+
+  let queueObj = musicQueues.get(voiceChannel.guild.id);
+
+  if (!queueObj) {
+    const player = await shoukaku.joinVoiceChannel({
+      guildId: voiceChannel.guild.id,
+      channelId: voiceChannel.id,
+      shardId: 0,
+      deaf: true,
+    });
+
+    queueObj = {
+      player,
+      textChannelId,
+      currentTrack: null,
+      queue: [],
+      loopMode: 'off',
+      volume: 100,
+    };
+    musicQueues.set(voiceChannel.guild.id, queueObj);
+
+    player.on('end', async () => {
+      const q = musicQueues.get(voiceChannel.guild.id);
+      if (!q) return;
+
+      if (q.loopMode === 'single' && q.currentTrack) {
+        await q.player.playTrack({ track: { encoded: q.currentTrack.encoded } });
+        return;
+      }
+
+      if (q.queue.length > 0) {
+        const next = q.queue.shift();
+        q.currentTrack = next;
+        await q.player.playTrack({ track: { encoded: next.encoded } });
+
+        const ch = client.channels.cache.get(q.textChannelId) as any;
+        if (ch) {
+          const embed = createMusicEmbed(next.info, true, q);
+          const controls = createMusicControls(true);
+          ch.send({ embeds: [embed], components: controls });
+        }
+      } else {
+        q.currentTrack = null;
+        await shoukaku.leaveVoiceChannel(voiceChannel.guild.id);
+        musicQueues.delete(voiceChannel.guild.id);
+      }
+    });
+  }
+
+  const tracks = Array.isArray(result.data) ? result.data : [result.data];
+  if (tracks.length === 0) throw new Error('Không có track nào được tải về');
+
+  for (const t of tracks) {
+    queueObj.queue.push(t);
+  }
+
+  if (!queueObj.currentTrack) {
+    const first = queueObj.queue.shift();
+    queueObj.currentTrack = first;
+    await queueObj.player.playTrack({ track: { encoded: first.encoded } });
+
+    const ch = client.channels.cache.get(textChannelId) as any;
+    if (ch) {
+      const embed = createMusicEmbed(first.info, true, queueObj);
+      const controls = createMusicControls(true);
+      ch.send({ embeds: [embed], components: controls });
+    }
+  }
+}
+
+export async function executeSlash(interaction: ChatInputCommandInteraction) {
   const member = interaction.member as GuildMember;
   const voiceChannel = member?.voice?.channel;
   const query = interaction.options.getString('query');
 
-  // Không có query -> Chỉ mở giao diện điều khiển ngay, không kết nối voice
   if (!query) {
-    const queue = distube.getQueue(interaction.guildId!);
-    const currentTrack = queue?.songs[0];
-    const embed = createMusicEmbed(currentTrack, queue?.playing, queue);
-    const components = createMusicControls(!!queue);
-
+    const queueObj = musicQueues.get(interaction.guildId!);
+    const embed = createMusicEmbed(queueObj?.currentTrack?.info, !queueObj?.player?.paused, queueObj);
+    const components = createMusicControls(!!queueObj);
     return interaction.reply({ embeds: [embed], components });
   }
 
-  // Có query -> Yêu cầu phải ở trong Voice Channel
   if (!voiceChannel) {
-    return interaction.reply({ 
-      content: '⌁ Bạn cần tham gia một kênh Voice trước khi phát nhạc!', 
-      ephemeral: true 
-    });
-  }
-
-  // Kiểm tra quyền hạn của bot trong voice channel
-  const botMember = interaction.guild?.members.me;
-  if (botMember && !voiceChannel.permissionsFor(botMember).has([PermissionsBitField.Flags.Connect, PermissionsBitField.Flags.Speak])) {
-    return interaction.reply({
-      content: '⚠️ Bot thiếu quyền **Connect** hoặc **Speak** trong kênh thoại này!',
-      ephemeral: true,
-    });
+    return interaction.reply({ content: '⌁ Bạn cần tham gia một kênh Voice trước khi phát nhạc!', ephemeral: true });
   }
 
   await interaction.deferReply();
-
   try {
-    await distube.play(voiceChannel, query, {
-      member: member,
-      textChannel: interaction.channel as any,
-    });
-
+    await playTrackLogic(voiceChannel, interaction.channelId, query, interaction.user);
     return interaction.deleteReply().catch(() => null);
   } catch (err: any) {
     console.error('[PLAY_ERROR]', err);
-    return interaction.editReply({ 
-      content: `⚠️ Lỗi phát nhạc: \`${err.message || 'Không thể kết nối kênh voice'}\`` 
-    });
+    return interaction.editReply({ content: '⚠️ Lỗi phát nhạc: `' + (err.message || 'Lỗi không xác định') + '`' });
   }
 }
 
-// Thực thi Prefix Command !lplay
-export async function executePrefix(message: Message, distube: any, args: string[]) {
+export async function executePrefix(message: Message, args: string[]) {
   const query = args.join(' ').trim();
 
-  // Không có query -> Gửi controller
   if (!query) {
-    const queue = distube.getQueue(message.guildId!);
-    const currentTrack = queue?.songs[0];
-    const embed = createMusicEmbed(currentTrack, queue?.playing, queue);
-    const components = createMusicControls(!!queue);
+    const queueObj = musicQueues.get(message.guildId!);
+    const embed = createMusicEmbed(queueObj?.currentTrack?.info, !queueObj?.player?.paused, queueObj);
+    const components = createMusicControls(!!queueObj);
     return message.reply({ embeds: [embed], components });
   }
 
@@ -230,18 +285,10 @@ export async function executePrefix(message: Message, distube: any, args: string
     return message.reply('⌁ Bạn cần tham gia một kênh Voice trước!');
   }
 
-  const botMember = message.guild?.members.me;
-  if (botMember && !voiceChannel.permissionsFor(botMember).has([PermissionsBitField.Flags.Connect, PermissionsBitField.Flags.Speak])) {
-    return message.reply('⚠️ Bot thiếu quyền **Connect** hoặc **Speak** trong kênh thoại này!');
-  }
-
   try {
-    await distube.play(voiceChannel, query, {
-      member: message.member,
-      textChannel: message.channel as any,
-    });
+    await playTrackLogic(voiceChannel, message.channelId, query, message.author);
   } catch (err: any) {
     console.error('[PLAY_ERROR]', err);
-    message.reply(`⚠️ Lỗi phát nhạc: \`${err.message || 'Không thể kết nối kênh voice'}\``);
+    message.reply('⚠️ Lỗi phát nhạc: `' + (err.message || 'Lỗi không xác định') + '`');
   }
 }

@@ -6,8 +6,7 @@ import {
   Routes, 
   Collection, 
   Interaction, 
-  GuildMember,
-  PermissionsBitField
+  GuildMember
 } from 'discord.js';
 import { config } from 'dotenv';
 import { join } from 'path';
@@ -15,11 +14,8 @@ import { prisma } from '@lughx/database';
 import express from 'express';
 import os from 'os';
 
-// Tích hợp DisTube Audio Engine & Plugins
-import { DisTube } from 'distube';
-import { SpotifyPlugin } from '@distube/spotify';
-import { SoundCloudPlugin } from '@distube/soundcloud';
-import { YtDlpPlugin } from '@distube/yt-dlp';
+// Tích hợp Shoukaku (Lavalink Engine chuẩn PrimeMusic)
+import { Shoukaku, Connectors } from 'shoukaku';
 
 // Import các modules lệnh
 import * as pingCmd from './commands/ping';
@@ -30,7 +26,7 @@ import * as playCmd from './commands/play';
 // Nạp biến môi trường từ thư mục gốc
 config({ path: join(__dirname, '../../../.env') });
 
-const client = new Client({
+export const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
@@ -47,34 +43,33 @@ const commands = new Collection<string, any>();
 const commandList = [pingCmd, statsCmd, helpCmd, playCmd];
 commandList.forEach(cmd => commands.set(cmd.data.name, cmd));
 
-// --- Khởi tạo DisTube Music Engine chuẩn v5 ---
-const distube = new DisTube(client, {
-  emitNewSongOnly: true,
-  nsfw: true,
-  plugins: [
-    new SpotifyPlugin(),
-    new SoundCloudPlugin(),
-    new YtDlpPlugin(),
-  ],
+// --- Khởi tạo Lavalink qua Shoukaku ---
+const Nodes = [{
+  name: 'lughx-lavalink',
+  url: 'localhost:2333',
+  auth: 'youshallnotpass',
+  secure: false
+}];
+
+export const shoukaku = new Shoukaku(new Connectors.DiscordJS(client), Nodes);
+
+shoukaku.on('ready', (name: string) => {
+  console.log('[LAVALINK] Node ' + name + ' đã kết nối thành công!');
 });
 
-// Sự kiện phát nhạc mới
-(distube as any).on('playSong', (queue: any, song: any) => {
-  const embed = playCmd.createMusicEmbed(song, true, queue);
-  const components = playCmd.createMusicControls(true);
-  queue.textChannel?.send({ embeds: [embed], components });
+shoukaku.on('error', (name: string, error: unknown) => {
+  console.error('[LAVALINK] Lỗi Node ' + name + ':', error);
 });
 
-(distube as any).on('addSong', (queue: any, song: any) => {
-  queue.textChannel?.send(`⌁ Đã thêm vào danh sách phát: **${song.name}** \`[${song.formattedDuration}]\``);
-});
-
-(distube as any).on('error', (channel: any, error: any) => {
-  console.error('[DISTUBE_ERROR]', error);
-  if (channel && 'send' in channel) {
-    channel.send(`⚠️ Đã xảy ra lỗi âm thanh: \`${error.message?.slice(0, 100) || 'Lỗi không xác định'}\``);
-  }
-});
+// Quản lý hàng đợi nhạc cho các server
+export const musicQueues = new Map<string, {
+  player: any;
+  textChannelId: string;
+  currentTrack: any;
+  queue: any[];
+  loopMode: 'off' | 'single' | 'all';
+  volume: number;
+}>();
 
 // --- Khởi tạo Internal API Server cho Bot (Cổng 5001) ---
 const app = express();
@@ -143,10 +138,10 @@ app.get('/internal/servers/:id', async (req, res) => {
 });
 
 app.listen(INTERNAL_PORT, () => {
-  console.log(`[BOT-INTERNAL] API nội bộ đang chạy tại cổng ${INTERNAL_PORT}`);
+  console.log('[BOT-INTERNAL] API nội bộ đang chạy tại cổng ' + INTERNAL_PORT);
 });
 
-// --- Triển khai đồng bộ Slash Commands: Triệt tiêu nhân đôi lệnh ---
+// --- Triển khai đồng bộ Slash Commands ---
 async function deploySlashCommands(clientId: string, token: string) {
   const rest = new REST({ version: '10' }).setToken(token);
   const slashData = commandList.map(cmd => cmd.data.toJSON());
@@ -154,7 +149,6 @@ async function deploySlashCommands(clientId: string, token: string) {
   try {
     console.log('[SLASH] Đang dọn dẹp các lệnh Guild cũ và đồng bộ Slash Commands...');
 
-    // 1. Xóa sạch Guild Commands trên tất cả server bot tham gia để không bị lặp đôi
     for (const guild of client.guilds.cache.values()) {
       await rest.put(
         Routes.applicationGuildCommands(clientId, guild.id),
@@ -162,95 +156,99 @@ async function deploySlashCommands(clientId: string, token: string) {
       ).catch(() => null);
     }
 
-    // 2. Chỉ đăng ký duy nhất danh sách Global Commands chuẩn
     await rest.put(
       Routes.applicationCommands(clientId),
       { body: slashData }
     );
 
-    console.log(`[SLASH] Đã dọn sạch trùng lặp và đồng bộ thành công ${slashData.length} lệnh Global duy nhất!`);
+    console.log('[SLASH] Đã dọn sạch trùng lặp và đồng bộ thành công ' + slashData.length + ' lệnh Global duy nhất!');
   } catch (error) {
     console.error('[SLASH_DEPLOY_ERROR] Lỗi khi deploy Slash Commands:', error);
   }
 }
 
 client.once('clientReady', async () => {
-  console.log(`[BOT] LughxOmniBot đã online với tư cách: ${client.user?.tag}`);
+  console.log('[BOT] LughxOmniBot đã online với tư cách: ' + (client.user?.tag || 'Bot'));
 
   if (client.user?.id && process.env.DISCORD_BOT_TOKEN) {
     await deploySlashCommands(client.user.id, process.env.DISCORD_BOT_TOKEN);
   }
 });
 
-// --- Lắng nghe các tương tác (Buttons, Modals, Slash Commands) ---
+// --- Lắng nghe tương tác Buttons, Modals, Slash Commands ---
 client.on('interactionCreate', async (interaction: Interaction) => {
-  // 1. Nút bấm trên bảng điều khiển nhạc
+  // 1. Nút bấm điều khiển nhạc
   if (interaction.isButton()) {
-    const queue = distube.getQueue(interaction.guildId!);
+    if (!interaction.guildId) return;
+    const q = musicQueues.get(interaction.guildId);
 
     if (interaction.customId === 'music_add_modal') {
       const modal = playCmd.createMusicModal();
       return interaction.showModal(modal);
     }
 
-    if (!queue) {
+    if (!q || !q.player) {
       return interaction.reply({ content: '⌁ Hiện không có bài hát nào đang phát!', ephemeral: true });
     }
 
     switch (interaction.customId) {
       case 'music_pause_resume':
-        if (queue.playing) {
-          distube.pause(interaction.guildId!);
-          await interaction.reply({ content: '⏸ Đã tạm dừng phát nhạc!', ephemeral: true });
-        } else {
-          distube.resume(interaction.guildId!);
+        if (q.player.paused) {
+          await q.player.setPaused(false);
           await interaction.reply({ content: '⏵ Đã tiếp tục phát nhạc!', ephemeral: true });
+        } else {
+          await q.player.setPaused(true);
+          await interaction.reply({ content: '⏸ Đã tạm dừng phát nhạc!', ephemeral: true });
         }
         break;
 
       case 'music_skip':
-        await distube.skip(interaction.guildId!).catch(() => distube.stop(interaction.guildId!));
+        await q.player.stopTrack();
         await interaction.reply({ content: '⏭ Đã chuyển sang bài tiếp theo!', ephemeral: true });
         break;
 
       case 'music_loop': {
-        const mode = distube.setRepeatMode(interaction.guildId!);
-        const modeText = mode === 0 ? 'Tắt' : mode === 1 ? 'Lặp 1 bài' : 'Lặp toàn bộ hàng đợi';
-        await interaction.reply({ content: `𝄪 Chế độ lặp: **${modeText}**`, ephemeral: true });
+        const next = q.loopMode === 'off' ? 'single' : q.loopMode === 'single' ? 'all' : 'off';
+        q.loopMode = next;
+        const text = next === 'off' ? 'Tắt' : next === 'single' ? 'Lặp 1 bài' : 'Lặp toàn bộ';
+        await interaction.reply({ content: '𝄪 Chế độ lặp: **' + text + '**', ephemeral: true });
         break;
       }
 
       case 'music_stop':
-        distube.stop(interaction.guildId!);
-        await interaction.reply({ content: '⏹ Đã dừng phát nhạc và rời kênh thoại!', ephemeral: true });
+        q.queue = [];
+        if (interaction.guildId) {
+          await shoukaku.leaveVoiceChannel(interaction.guildId);
+          musicQueues.delete(interaction.guildId);
+        }
+        await interaction.reply({ content: '⏹ Đã ngắt kết nối kênh thoại!', ephemeral: true });
         break;
 
       case 'music_vol_up': {
-        const newVol = Math.min(queue.volume + 10, 150);
-        distube.setVolume(interaction.guildId!, newVol);
-        await interaction.reply({ content: `▷ Đã tăng âm lượng lên: **${newVol}%**`, ephemeral: true });
+        const newVol = Math.min(q.volume + 10, 150);
+        q.volume = newVol;
+        await q.player.setFilterVolume(newVol / 100);
+        await interaction.reply({ content: '▷ Đã tăng âm lượng lên: **' + newVol + '%**', ephemeral: true });
         break;
       }
 
       case 'music_vol_down': {
-        const newVol = Math.max(queue.volume - 10, 10);
-        distube.setVolume(interaction.guildId!, newVol);
-        await interaction.reply({ content: `◁ Đã giảm âm lượng xuống: **${newVol}%**`, ephemeral: true });
+        const newVol = Math.max(q.volume - 10, 10);
+        q.volume = newVol;
+        await q.player.setFilterVolume(newVol / 100);
+        await interaction.reply({ content: '◁ Đã giảm âm lượng xuống: **' + newVol + '%**', ephemeral: true });
         break;
       }
 
       case 'music_shuffle':
-        await distube.shuffle(interaction.guildId!);
+        q.queue.sort(() => Math.random() - 0.5);
         await interaction.reply({ content: '𖦹 Đã xáo trộn danh sách bài hát!', ephemeral: true });
         break;
 
       case 'music_queue': {
-        const qList = queue.songs
-          .slice(0, 5)
-          .map((s: any, idx: number) => `\`${idx + 1}.\` **${s.name}** \`[${s.formattedDuration}]\``)
-          .join('\n');
+        const items = q.queue.slice(0, 5).map((t, idx) => (idx + 1) + '. **' + t.info.title + '**').join('\n');
         await interaction.reply({
-          content: `✦ **Hàng Đợi Hiện Tại (${queue.songs.length} bài):**\n${qList}${queue.songs.length > 5 ? '\n*...và các bài khác*' : ''}`,
+          content: '✦ **Hàng Đợi Hiện Tại (' + q.queue.length + ' bài):**\n' + (items || '*Trống*'),
           ephemeral: true,
         });
         break;
@@ -259,7 +257,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     return;
   }
 
-  // 2. Nhận Form Modal dán link / tìm bài hát
+  // 2. Form Modal nạp bài hát
   if (interaction.isModalSubmit()) {
     if (interaction.customId === 'music_link_modal') {
       const query = interaction.fields.getTextInputValue('music_query_input');
@@ -270,41 +268,26 @@ client.on('interactionCreate', async (interaction: Interaction) => {
         return interaction.reply({ content: '⌁ Bạn cần kết nối vào kênh Voice trước!', ephemeral: true });
       }
 
-      const botMember = interaction.guild?.members.me;
-      if (botMember && !voiceChannel.permissionsFor(botMember).has([PermissionsBitField.Flags.Connect, PermissionsBitField.Flags.Speak])) {
-        return interaction.reply({
-          content: '⚠️ Bot thiếu quyền **Connect** hoặc **Speak** trong kênh thoại này!',
-          ephemeral: true,
-        });
-      }
-
       await interaction.deferReply({ ephemeral: true });
       try {
-        await distube.play(voiceChannel, query, {
-          member,
-          textChannel: interaction.channel as any,
-        });
-        await interaction.editReply({ content: `✦ Đã nạp thành công yêu cầu: \`${query}\`` });
+        await playCmd.playTrackLogic(voiceChannel, interaction.channelId, query, member.user);
+        await interaction.editReply({ content: '✦ Đã nạp thành công yêu cầu: `' + query + '`' });
       } catch (err: any) {
-        await interaction.editReply({ content: `⚠️ Không thể nạp bài hát: \`${err.message || 'Lỗi không xác định'}\`` });
+        await interaction.editReply({ content: '⚠️ Lỗi phát nhạc: `' + (err.message || 'Lỗi không xác định') + '`' });
       }
     }
     return;
   }
 
-  // 3. Thực thi Slash Commands
+  // 3. Slash Commands
   if (interaction.isChatInputCommand()) {
     const cmd = commands.get(interaction.commandName);
     if (!cmd) return;
 
     try {
-      if (interaction.commandName === 'lplay') {
-        await cmd.executeSlash(interaction as any, distube);
-      } else {
-        await cmd.executeSlash(interaction as any);
-      }
+      await cmd.executeSlash(interaction as any);
     } catch (err) {
-      console.error(`[COMMAND_ERROR] Lỗi khi chạy lệnh /${interaction.commandName}:`, err);
+      console.error('[COMMAND_ERROR] Lỗi /' + interaction.commandName + ':', err);
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp({ content: 'Đã có lỗi xảy ra khi thực thi lệnh này!', ephemeral: true });
       } else {
@@ -314,7 +297,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
   }
 });
 
-// --- Lắng nghe Prefix Commands (Tin nhắn) ---
+// --- Lắng nghe Prefix Commands ---
 client.on('messageCreate', async (message: Message) => {
   if (message.author.bot || !message.guild) return;
 
@@ -337,17 +320,17 @@ client.on('messageCreate', async (message: Message) => {
     if (commandName === 'help') {
       await cmd.executePrefix(message, currentPrefix);
     } else if (commandName === 'lplay' || commandName === 'play') {
-      await cmd.executePrefix(message, distube, args);
+      await cmd.executePrefix(message, args);
     } else {
       await cmd.executePrefix(message);
     }
   } catch (err) {
-    console.error(`[PREFIX_ERROR] Lỗi khi chạy lệnh ${currentPrefix}${commandName}:`, err);
+    console.error('[PREFIX_ERROR] Lỗi lệnh ' + currentPrefix + commandName + ':', err);
     message.reply('Đã xảy ra lỗi khi thực thi lệnh!');
   }
 });
 
-// --- Sự kiện Chào mừng Thành viên Mới ---
+// --- Chào mừng thành viên mới ---
 client.on('guildMemberAdd', async (member) => {
   try {
     const config = await prisma.guildConfig.findUnique({
@@ -358,7 +341,7 @@ client.on('guildMemberAdd', async (member) => {
 
     const channel = member.guild.channels.cache.get(config.welcomeChannelId);
     if (channel && channel.isTextBased()) {
-      channel.send(`Chào mừng ${member} đã tham gia máy chủ **${member.guild.name}**! 🎉`);
+      channel.send('Chào mừng ' + member.toString() + ' đã tham gia máy chủ **' + member.guild.name + '**! 🎉');
     }
   } catch (err) {
     console.error('[WELCOME_ERROR]', err);
