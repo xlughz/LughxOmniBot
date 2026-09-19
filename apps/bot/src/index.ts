@@ -6,7 +6,8 @@ import {
   Events, 
   REST, 
   Routes,
-  ChannelType 
+  ChannelType,
+  EmbedBuilder
 } from 'discord.js';
 import express from 'express';
 import dotenv from 'dotenv';
@@ -74,7 +75,7 @@ client.once(Events.ClientReady, async (readyClient) => {
         { body: commandsArray }
       );
 
-      // Dọn sạch Guild Commands rác trên từng Server (nguyên nhân gây treo /lplay)
+      // Dọn sạch Guild Commands rác trên từng Server
       for (const [guildId] of readyClient.guilds.cache) {
         await rest.put(
           Routes.applicationGuildCommands(readyClient.user.id, guildId),
@@ -103,7 +104,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     } catch (error) {
       console.error(`[EXECUTE_ERROR] /${interaction.commandName}:`, error);
-      const replyContent = { content: '❌ Có lỗi xảy ra khi thực thi lệnh!', ephemeral: true };
+      const replyContent = { content: '❌ Có lỗi xảy ra khi thực thi lệnh!', flags: 64 };
       if (interaction.deferred || interaction.replied) {
         await interaction.editReply(replyContent);
       } else {
@@ -113,26 +114,55 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-// 4. Xử lý sự kiện khi có thành viên mới tham gia server (Tự động chào mừng theo kênh DB)
+// 4. Xử lý sự kiện chào mừng thành viên mới (Chuẩn mẫu yêu cầu kèm ID kênh và GIF nhỏ)
 client.on(Events.GuildMemberAdd, async (member) => {
   try {
     const config = await prisma.guildConfig.findUnique({
       where: { guildId: member.guild.id },
     });
 
-    if (config?.welcomeChannelId) {
-      const channel = member.guild.channels.cache.get(config.welcomeChannelId) 
-        || await member.guild.channels.fetch(config.welcomeChannelId).catch(() => null);
+    if (!config?.welcomeChannelId) return;
 
-      if (channel && channel.isTextBased()) {
-        await (channel as any).send(
-          `👋 Chào mừng <@${member.id}> đã tham gia **${member.guild.name}**!`
-        );
-        console.log(`[WELCOME] Đã gửi thông báo chào mừng cho ${member.user.tag} tại ${member.guild.name}`);
-      }
+    const channel = member.guild.channels.cache.get(config.welcomeChannelId) 
+      || await member.guild.channels.fetch(config.welcomeChannelId).catch(() => null);
+
+    if (channel && channel.isTextBased()) {
+      const adminRoleId = "1550897096779899003"; 
+      const welcomeGifUrl = "https://i.pinimg.com/originals/1f/73/60/1f736040a3868b98c8c4fb9146a7b955.gif";
+
+      // Các ID kênh đã cấu hình
+      const ticketId = "1417021896909918218";
+      const tosId = "1416786343710822550";
+      const legitId = "1531985290292498453";
+      const priceId = "1417913643156115598";
+
+      const welcomeEmbed = new EmbedBuilder()
+        .setColor(0x2f3136)
+        .setAuthor({ 
+          name: member.user.tag, 
+          iconURL: member.user.displayAvatarURL({ size: 128 }) 
+        })
+        .setTitle(`Welcome to ${member.guild.name} 🤖`)
+        .setDescription(
+          `😎 **Server tụi mình chuyên cho thuê acc Free Fire và một số dịch vụ khác nếu bạn cần** 😎,\n\n` +
+          `> 🎫 <#${ticketId}> : ticket support\n` +
+          `> 📦 <#${tosId}> : chính sách / tos\n` +
+          `> 💼 <#${legitId}> : check legit\n` +
+          `> 🥐 <#${priceId}> : bảng giá\n\n` +
+          `*Mọi thắc mắc vui lòng liên hệ qua <@&${adminRoleId}> để được hỗ trợ. Chúc bạn có trải nghiệm thật tốt khi tham gia sever nếu có sai sót gì hãy feedback nhé xin cảm ơn*`
+        )
+        .setImage(welcomeGifUrl)
+        .setTimestamp();
+
+      await (channel as any).send({
+        content: `Hi ${member} chúc bạn một ngày tốt lành`,
+        embeds: [welcomeEmbed]
+      });
+
+      console.log(`[WELCOME] Đã gửi Embed chuẩn mẫu cho ${member.user.tag}`);
     }
   } catch (error) {
-    console.error('[WELCOME_ERROR] Lỗi khi gửi tin nhắn chào mừng:', error);
+    console.error('[WELCOME_ERROR] Lỗi gửi tin nhắn chào mừng:', error);
   }
 });
 
@@ -141,7 +171,6 @@ client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot || !message.guild) return;
 
   try {
-    // Đọc Prefix cấu hình từ Database (mặc định "!l" nếu chưa cấu hình)
     const config = await prisma.guildConfig.findUnique({
       where: { guildId: message.guild.id },
     });
@@ -156,7 +185,7 @@ client.on(Events.MessageCreate, async (message) => {
     if (commandName === 'ping') {
       message.reply(`🏓 Pong! Độ trễ bot: **${client.ws.ping}ms**`);
     } else if (commandName === 'help') {
-      message.reply(`📌 **Tiền tố hiện tại:** \`${prefix}\`\nCác lệnh khả dụng: \`${prefix}ping\`, \`${prefix}help\` hoặc gõ dấu \`/\` để dùng Slash Commands.`);
+      message.reply(`📌 **Tiền tố hiện tại:** \`${prefix}\`\nCác lệnh khả dụng: \`${prefix}ping\`, \`${prefix}help\``);
     }
   } catch (error) {
     console.error('[PREFIX_COMMAND_ERROR]', error);
@@ -266,12 +295,10 @@ app.get('/internal/servers/:id', async (req, res) => {
       return res.status(404).json({ error: 'Server không tìm thấy' });
     }
 
-    // Fetch toàn bộ channels từ Discord API nếu cache rỗng
     const fetchedChannels = await guild.channels.fetch().catch(() => guild.channels.cache);
 
     const textChannels: any[] = [];
     fetchedChannels.forEach((channel: any) => {
-      // ChannelType.GuildText có giá trị enum là 0
       if (channel && (channel.type === 0 || channel.type === ChannelType.GuildText)) {
         textChannels.push({
           id: channel.id,
