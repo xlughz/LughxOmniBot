@@ -8,9 +8,9 @@ import {
   ButtonStyle, 
   ModalBuilder, 
   TextInputBuilder, 
-  TextInputStyle,
-  GuildMember,
-  PermissionsBitField
+  TextInputStyle, 
+  GuildMember, 
+  PermissionsBitField 
 } from 'discord.js';
 
 export const data = new SlashCommandBuilder()
@@ -22,7 +22,7 @@ export const data = new SlashCommandBuilder()
       .setRequired(false)
   );
 
-// Thanh tiến trình typography phẳng
+// Thanh tiến trình Minimalist dạng typography phẳng
 function createProgressBar(currentSeconds: number, totalSeconds: number, barLength = 16) {
   if (!totalSeconds || totalSeconds === 0) return '━'.repeat(barLength);
   const progress = Math.min(Math.max(currentSeconds / totalSeconds, 0), 1);
@@ -168,7 +168,7 @@ export async function executeSlash(interaction: ChatInputCommandInteraction, dis
   const voiceChannel = member?.voice?.channel;
   const query = interaction.options.getString('query');
 
-  // Không có query -> Chỉ mở giao diện điều khiển, không kết nối voice
+  // Không có query -> Chỉ mở giao diện điều khiển ngay, không kết nối voice
   if (!query) {
     const queue = distube.getQueue(interaction.guildId!);
     const currentTrack = queue?.songs[0];
@@ -178,7 +178,7 @@ export async function executeSlash(interaction: ChatInputCommandInteraction, dis
     return interaction.reply({ embeds: [embed], components });
   }
 
-  // Có query -> Kiểm tra kênh thoại
+  // Có query -> Yêu cầu phải ở trong Voice Channel
   if (!voiceChannel) {
     return interaction.reply({ 
       content: '⌁ Bạn cần tham gia một kênh Voice trước khi phát nhạc!', 
@@ -186,7 +186,7 @@ export async function executeSlash(interaction: ChatInputCommandInteraction, dis
     });
   }
 
-  // Kiểm tra quyền của Bot trong Voice Channel
+  // Kiểm tra quyền hạn của bot trong voice channel
   const botMember = interaction.guild?.members.me;
   if (botMember && !voiceChannel.permissionsFor(botMember).has([PermissionsBitField.Flags.Connect, PermissionsBitField.Flags.Speak])) {
     return interaction.reply({
