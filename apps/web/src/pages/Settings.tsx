@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { User, Shield, Terminal, Bell, CheckCircle2, AlertTriangle } from 'lucide-react';
 
-const API_BASE_URL = 'http://160.191.237.229:3000';
+const API_BASE_URL = 'http://160.191.237.229:5000';
 
 export default function Settings() {
   const [user, setUser] = useState<any>(null);
