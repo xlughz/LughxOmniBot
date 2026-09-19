@@ -17,21 +17,21 @@ export default function BotCluster() {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(false);
 
-const fetchStats = async () => {
-  setLoading(true);
-  try {
-    const apiUrl = `http://${window.location.hostname}:5000/api/stats`;
-    const res = await fetch(apiUrl, { credentials: 'omit' });
-    const json = await res.json();
-    if (json.success && json.data) {
-      setStats(json.data);
+  const fetchStats = async () => {
+    setLoading(true);
+    try {
+      const apiUrl = `http://${window.location.hostname}:5000/api/stats`;
+      const res = await fetch(apiUrl, { credentials: 'omit' });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setStats(json.data);
+      }
+    } catch (err) {
+      console.error('Lỗi nạp stats:', err);
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error('Lỗi nạp stats:', err);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   useEffect(() => {
     fetchStats();
@@ -44,7 +44,7 @@ const fetchStats = async () => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     const h = Math.floor(m / 60);
-    if (h > 0) return `${h}h ${m % 60}m ${s}s`;
+    if (h > 0) return `${h}h ${m}m ${s}s`;
     if (m > 0) return `${m}m ${s}s`;
     return `${s}s`;
   };
@@ -75,7 +75,7 @@ const fetchStats = async () => {
           </div>
           <div className="flex items-center gap-2 text-emerald-400 font-semibold text-lg">
             <ShieldCheck className="w-5 h-5" />
-            <span className="capitalize">{stats?.shardStatus || 'online'}</span>
+            <span className="capitalize">{stats?.shardStatus || 'Online'}</span>
           </div>
           <p className="text-xs text-neutral-400 mt-2">Ping: {stats?.systemPing ?? 0}ms</p>
         </div>

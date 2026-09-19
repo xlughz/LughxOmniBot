@@ -15,7 +15,6 @@ import serverRoutes from './routes/servers';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Cấu hình helmet cho phép request fetch từ frontend khác port
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
@@ -43,7 +42,7 @@ app.use(
 app.use(express.json());
 app.use(cookieParser());
 
-// 1. Health check
+// Health check
 app.get('/api/health', async (req: Request, res: Response) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -53,12 +52,11 @@ app.get('/api/health', async (req: Request, res: Response) => {
   }
 });
 
-// 2. Đăng ký các Route API trước khi listen
+// Đăng ký toàn bộ routes trước khi gọi listen
 app.use('/api/auth', authRoutes);
 app.use('/api/stats', statsRoutes); 
 app.use('/api/servers', serverRoutes);
 
-// 3. Khởi động server
 app.listen(PORT, () => {
   console.log(`[API] Máy chủ Backend đang chạy tại: http://localhost:${PORT}`);
 });
