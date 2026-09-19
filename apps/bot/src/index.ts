@@ -64,18 +64,28 @@ if (fs.existsSync(commandsPath)) {
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`[BOT] LughxOmniBot đã online: ${readyClient.user.tag}`);
 
+  // (Tùy chọn) Giả lập sự kiện chào mừng khi bot vừa khởi động để test nhanh giao diện
+  setTimeout(() => {
+    const guild = readyClient.guilds.cache.first();
+    if (guild) {
+      const member = guild.members.cache.first();
+      if (member) {
+        console.log(`[TEST] Đang giả lập sự kiện chào mừng cho user: ${member.user.tag}`);
+        client.emit('guildMemberAdd', member);
+      }
+    }
+  }, 4000);
+
   setTimeout(async () => {
     const rest = new REST({ version: '10' }).setToken(token);
     try {
       console.log('[SLASH] Bắt đầu đồng bộ danh sách Slash Commands...');
 
-      // Ghi đè toàn bộ Global Commands bằng danh sách hiện tại (ping, stats, help)
       await rest.put(
         Routes.applicationCommands(readyClient.user.id),
         { body: commandsArray }
       );
 
-      // Dọn sạch Guild Commands rác trên từng Server
       for (const [guildId] of readyClient.guilds.cache) {
         await rest.put(
           Routes.applicationGuildCommands(readyClient.user.id, guildId),
@@ -130,7 +140,6 @@ client.on(Events.GuildMemberAdd, async (member) => {
       const adminRoleId = "1550897096779899003"; 
       const welcomeGifUrl = "https://i.pinimg.com/originals/1f/73/60/1f736040a3868b98c8c4fb9146a7b955.gif";
 
-      // Các ID kênh đã cấu hình
       const ticketId = "1417021896909918218";
       const tosId = "1416786343710822550";
       const legitId = "1531985290292498453";
@@ -198,7 +207,6 @@ client.login(token);
 const app = express();
 app.use(express.json());
 
-// Endpoint Health Check
 app.get(['/api/health', '/internal/health'], (req, res) => {
   res.json({
     status: 'ok',
@@ -210,7 +218,6 @@ app.get(['/api/health', '/internal/health'], (req, res) => {
   });
 });
 
-// Endpoint thống kê tài nguyên (RAM, VPS, Uptime)
 const handleStats = (req: any, res: any) => {
   let totalMembers = 0;
   client.guilds.cache.forEach(g => { totalMembers += (g.memberCount || 0); });
@@ -271,7 +278,6 @@ const handleStats = (req: any, res: any) => {
 app.get('/internal/stats', handleStats);
 app.get('/api/stats', handleStats);
 
-// Endpoint danh sách server
 const handleServers = (req: any, res: any) => {
   const list = client.guilds.cache.map(g => ({
     id: g.id,
@@ -285,7 +291,6 @@ const handleServers = (req: any, res: any) => {
 app.get('/internal/servers', handleServers);
 app.get('/api/guilds', handleServers);
 
-// Endpoint chi tiết 1 server: Fetch trực tiếp kênh văn bản để đổ vào dropdown Kênh Chào Mừng
 app.get('/internal/servers/:id', async (req, res) => {
   try {
     const guildId = req.params.id;

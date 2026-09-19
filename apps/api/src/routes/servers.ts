@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { prisma } from '@lughx/database';
 
 const router = Router();
 
@@ -17,26 +18,43 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// Lấy thông tin chi tiết 1 server theo Guild ID
+// Lấy thông tin chi tiết 1 server và cấu hình đã lưu trong DB
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+
     const botRes = await fetch(`http://localhost:5001/internal/servers/${id}`);
     if (!botRes.ok) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy máy chủ' });
     }
     const serverDetails = await botRes.json();
 
-    // Khớp chuẩn cả serverData lẫn data cho ServerSettings.tsx
-res.json({ 
-      success: true, 
+    let config = await prisma.guildConfig.findUnique({
+      where: { guildId: id }
+    });
+
+    if (!config) {
+      config = {
+        id: '',
+        guildId: id,
+        prefix: '!l',
+        welcomeChannelId: '',
+        musicEnabled: true,
+        modEnabled: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+    }
+
+    res.json({
+      success: true,
       data: serverDetails,
       serverData: serverDetails,
       config: {
-        prefix: '!l',
-        welcomeChannelId: '',
-        musicEnabled: false,
-        modEnabled: true
+        prefix: config.prefix,
+        welcomeChannelId: config.welcomeChannelId || '',
+        musicEnabled: config.musicEnabled,
+        modEnabled: config.modEnabled
       }
     });
   } catch (error) {
@@ -45,15 +63,34 @@ res.json({
   }
 });
 
-// Xử lý lưu cấu hình
+// Lưu cấu hình vào Database qua Prisma upsert từ Dashboard
 router.post('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const newConfig = req.body;
-    console.log(`[CONFIG_SAVE] Máy chủ ${id}:`, newConfig);
-    res.json({ success: true, message: 'Cập nhật cấu hình thành công' });
+    const { prefix, welcomeChannelId, musicEnabled, modEnabled } = req.body;
+
+    const savedConfig = await prisma.guildConfig.upsert({
+      where: { guildId: id },
+      update: {
+        prefix: prefix || '!l',
+        welcomeChannelId: welcomeChannelId || null,
+        musicEnabled: Boolean(musicEnabled),
+        modEnabled: Boolean(modEnabled)
+      },
+      create: {
+        guildId: id,
+        prefix: prefix || '!l',
+        welcomeChannelId: welcomeChannelId || null,
+        musicEnabled: Boolean(musicEnabled),
+        modEnabled: Boolean(modEnabled)
+      }
+    });
+
+    console.log(`[DATABASE] Đã lưu cấu hình Guild ${id}:`, savedConfig);
+    res.json({ success: true, message: 'Đã lưu cấu hình thành công', config: savedConfig });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Lỗi khi lưu cấu hình' });
+    console.error('[CONFIG_SAVE_ERROR]', error);
+    res.status(500).json({ success: false, message: 'Lỗi khi lưu cấu hình vào cơ sở dữ liệu' });
   }
 });
 
