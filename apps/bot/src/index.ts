@@ -270,7 +270,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
 
       await interaction.deferReply({ ephemeral: true });
       try {
-        await playCmd.playTrackLogic(voiceChannel, interaction.channelId, query, member.user);
+        await playCmd.playTrackLogic(voiceChannel, interaction.channelId || '', query, member.user);
         await interaction.editReply({ content: '✦ Đã nạp thành công yêu cầu: `' + query + '`' });
       } catch (err: any) {
         await interaction.editReply({ content: '⚠️ Lỗi phát nhạc: `' + (err.message || 'Lỗi không xác định') + '`' });
