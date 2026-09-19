@@ -43,7 +43,7 @@ const commands = new Collection<string, any>();
 const commandList = [pingCmd, statsCmd, helpCmd, playCmd];
 commandList.forEach(cmd => commands.set(cmd.data.name, cmd));
 
-// --- Khởi tạo Lavalink qua Shoukaku ---
+// --- Cấu hình Node Lavalink v4 kết nối cục bộ ---
 const Nodes = [{
   name: 'lughx-lavalink',
   url: 'localhost:2333',
@@ -61,7 +61,7 @@ shoukaku.on('error', (name: string, error: unknown) => {
   console.error('[LAVALINK] Lỗi Node ' + name + ':', error);
 });
 
-// Quản lý hàng đợi nhạc cho các server
+// Quản lý hàng đợi âm thanh cho từng Guild
 export const musicQueues = new Map<string, {
   player: any;
   textChannelId: string;
@@ -175,7 +175,7 @@ client.once('clientReady', async () => {
   }
 });
 
-// --- Lắng nghe tương tác Buttons, Modals, Slash Commands ---
+// --- Lắng nghe các tương tác Buttons, Modals, Slash Commands ---
 client.on('interactionCreate', async (interaction: Interaction) => {
   // 1. Nút bấm điều khiển nhạc
   if (interaction.isButton()) {
