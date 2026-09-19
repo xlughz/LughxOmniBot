@@ -1,6 +1,6 @@
 import { 
   SlashCommandBuilder, 
-  CommandInteraction, 
+  ChatInputCommandInteraction, // Thay CommandInteraction bằng ChatInputCommandInteraction
   Message, 
   EmbedBuilder, 
   ActionRowBuilder, 
@@ -21,7 +21,7 @@ export const data = new SlashCommandBuilder()
       .setRequired(false)
   );
 
-// Thanh tiến trình phong cách Minimalist (Sử dụng ━ và ◉)
+// Thanh tiến trình Minimalist
 function createProgressBar(currentSeconds: number, totalSeconds: number, barLength = 16) {
   if (!totalSeconds || totalSeconds === 0) return '━'.repeat(barLength);
   const progress = Math.min(Math.max(currentSeconds / totalSeconds, 0), 1);
@@ -32,10 +32,9 @@ function createProgressBar(currentSeconds: number, totalSeconds: number, barLeng
   return `${filled}◉${empty}`;
 }
 
-// Dựng Embed giao diện Đen mờ / Tối giản sang trọng
 export function createMusicEmbed(song?: any, isPlaying = true, queue?: any) {
   const embed = new EmbedBuilder()
-    .setColor(0x18181b) // Dark Zinc / Slate sang trọng
+    .setColor(0x18181b)
     .setFooter({ 
       text: '✦ LUGHX SOUND SYSTEM ✦ HI-RES AUDIO ✦', 
       iconURL: 'https://cdn.discordapp.com/embed/avatars/0.png' 
@@ -56,9 +55,9 @@ export function createMusicEmbed(song?: any, isPlaying = true, queue?: any) {
         `\`\`\`text\n${progressBar} [${queue.formattedCurrentTime || '00:00'} / ${song.formattedDuration}]\`\`\``
       )
       .addFields(
-        { name: '✦ Artist', value: `\`${song.uploader.name || 'Unknown'}\``, inline: true },
+        { name: '✦ Artist', value: `\`${song.uploader?.name || 'Unknown'}\``, inline: true },
         { name: '✦ Request', value: `${song.user}`, inline: true },
-        { name: '✦ Platform', value: `\`${song.source.toUpperCase()}\``, inline: true },
+        { name: '✦ Platform', value: `\`${(song.source || 'WEB').toUpperCase()}\``, inline: true },
         { name: '✦ Volume', value: `\`${queue.volume}%\``, inline: true },
         { name: '✦ Repeat', value: `\`${loopStatus}\``, inline: true },
         { name: '✦ Status', value: `\`${playState}\``, inline: true }
@@ -77,9 +76,7 @@ export function createMusicEmbed(song?: any, isPlaying = true, queue?: any) {
   return embed;
 }
 
-// Bảng nút điều khiển chuẩn Typography & Minimal Premium
 export function createMusicControls(hasQueue = false) {
-  // Hàng 1: Điều hướng & Playback
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId('music_add_modal')
@@ -112,7 +109,6 @@ export function createMusicControls(hasQueue = false) {
       .setDisabled(!hasQueue)
   );
 
-  // Hàng 2: Volume & Danh sách phát
   const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId('music_vol_down')
@@ -143,7 +139,6 @@ export function createMusicControls(hasQueue = false) {
   return [row1, row2];
 }
 
-// Modal nhập link / từ khóa
 export function createMusicModal() {
   const modal = new ModalBuilder()
     .setCustomId('music_link_modal')
@@ -161,7 +156,7 @@ export function createMusicModal() {
   return modal;
 }
 
-export async function executeSlash(interaction: CommandInteraction, distube: any) {
+export async function executeSlash(interaction: ChatInputCommandInteraction, distube: any) {
   const member = interaction.member as GuildMember;
   const voiceChannel = member?.voice?.channel;
 
@@ -169,7 +164,7 @@ export async function executeSlash(interaction: CommandInteraction, distube: any
     return interaction.reply({ content: '⌁ Bạn cần tham gia một kênh Voice trước!', ephemeral: true });
   }
 
-  const query = interaction.options.get('query')?.value as string;
+  const query = interaction.options.getString('query');
 
   if (query) {
     await interaction.deferReply();

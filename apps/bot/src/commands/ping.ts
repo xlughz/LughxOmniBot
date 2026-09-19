@@ -5,8 +5,9 @@ export const data = new SlashCommandBuilder()
   .setDescription('Kiểm tra độ trễ mạng và phản hồi Discord API');
 
 export async function executeSlash(interaction: CommandInteraction) {
-  const sent = await interaction.reply({ content: 'Đang đo độ trễ...', fetchReply: true });
-  const latency = sent.createdTimestamp - interaction.createdTimestamp;
+  await interaction.reply({ content: 'Đang đo độ trễ...' });
+  const reply = await interaction.fetchReply();
+  const latency = reply.createdTimestamp - interaction.createdTimestamp;
   await interaction.editReply(`Pong! Trễ mạng: \`${latency}ms\` | Discord API: \`${interaction.client.ws.ping}ms\``);
 }
 
