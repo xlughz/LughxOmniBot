@@ -35,7 +35,7 @@ const client = new Client({
 export const commands = new Collection<string, any>();
 const commandsArray: any[] = [];
 
-// Quét nạp lệnh tự động
+// 1. Quét nạp tự động toàn bộ lệnh trong thư mục commands
 const commandsPath = path.join(__dirname, 'commands');
 if (fs.existsSync(commandsPath)) {
   const commandFiles = fs.readdirSync(commandsPath).filter(file => 
@@ -57,6 +57,7 @@ if (fs.existsSync(commandsPath)) {
   }
 }
 
+// 2. Đồng bộ Slash Commands lên Discord Gateway khi sẵn sàng
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`[BOT] LughxOmniBot đã online với tư cách: ${readyClient.user.tag}`);
 
@@ -75,6 +76,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   }, 2000);
 });
 
+// 3. Xử lý Interaction
 client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isChatInputCommand()) {
     const command = commands.get(interaction.commandName);
@@ -104,7 +106,7 @@ client.login(token);
 const app = express();
 app.use(express.json());
 
-// 1. Health check
+// Health Check
 app.get(['/api/health', '/internal/health'], (req, res) => {
   res.json({
     status: 'ok',
@@ -116,85 +118,79 @@ app.get(['/api/health', '/internal/health'], (req, res) => {
   });
 });
 
-// 2. Thống kê toàn diện (Cluster, RAM, Uptime, OS)
+// Thống kê chi tiết Realtime (RAM Bot, RAM VPS, Uptime, Ping, Server/User)
 const handleStats = (req: any, res: any) => {
   let totalMembers = 0;
   client.guilds.cache.forEach(g => { totalMembers += (g.memberCount || 0); });
 
   const memUsage = process.memoryUsage();
-  const botRamMB = Math.round(memUsage.rss / 1024 / 1024);
-  const botHeapMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+  const botRamMB = Math.round(memUsage.heapUsed / 1024 / 1024);
 
   const totalMem = os.totalmem();
   const freeMem = os.freemem();
   const usedMem = totalMem - freeMem;
-  const sysRamPercent = Math.round((usedMem / totalMem) * 100);
-  const totalMemMB = Math.round(totalMem / 1024 / 1024);
-  const usedMemMB = Math.round(usedMem / 1024 / 1024);
+  const sysPercent = Math.round((usedMem / totalMem) * 100);
+  const totalMB = Math.round(totalMem / 1024 / 1024);
+  const usedMB = Math.round(usedMem / 1024 / 1024);
 
   const uptimeSec = Math.floor(process.uptime());
   const currentPing = client.ws.ping > 0 ? client.ws.ping : 45;
 
   res.json({
-    status: client.isReady() ? 'online' : 'offline',
-    online: client.isReady(),
-    isReady: client.isReady(),
+    status: 'online',
+    online: true,
+    isReady: true,
     tag: client.user?.tag || null,
 
     // Ping
+    systemPing: currentPing,
     ping: currentPing,
     wsPing: currentPing,
-    systemPing: currentPing,
 
     // Uptime
     uptime: uptimeSec,
-    uptimeMs: client.uptime || (uptimeSec * 1000),
     botUptime: uptimeSec,
+    uptimeMs: client.uptime || (uptimeSec * 1000),
 
-    // Server & User
-    guilds: client.guilds.cache.size,
-    guildsCount: client.guilds.cache.size,
+    // Server & User counts
     totalServers: client.guilds.cache.size,
     activeServers: client.guilds.cache.size,
-    servers: client.guilds.cache.size,
-    users: totalMembers,
+    guilds: client.guilds.cache.size,
+    guildsCount: client.guilds.cache.size,
     totalUsers: totalMembers,
+    users: totalMembers,
     memberCount: totalMembers,
 
     // RAM của Bot
-    ram: botRamMB,
+    botRamMB: botRamMB,
     ramMB: botRamMB,
     memoryUsage: botRamMB,
-    botRam: botRamMB,
-    botRamMB: botRamMB,
-    botMemoryMB: botRamMB,
-    heapUsed: botHeapMB,
+    ram: botRamMB,
+    heapUsed: botRamMB,
     heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
 
-    // RAM Hệ thống VPS
-    systemRamPercent: sysRamPercent,
-    ramPercent: sysRamPercent,
-    ramUsagePercent: sysRamPercent,
-    systemRamUsed: usedMemMB,
-    systemRamTotal: totalMemMB,
-    usedMemMB: usedMemMB,
-    totalMemMB: totalMemMB,
+    // RAM Hệ thống VPS (Khớp chuẩn các key của BotCluster.tsx)
     systemMemory: {
-      used: usedMemMB,
-      total: totalMemMB,
-      percent: sysRamPercent,
+      usagePercent: sysPercent,
+      usedMB: usedMB,
+      totalMB: totalMB,
+      percent: sysPercent,
+      used: usedMB,
+      total: totalMB,
     },
-    
-    // Shard
+    systemRamPercent: sysPercent,
+    systemRamUsed: usedMB,
+    systemRamTotal: totalMB,
+
     shardId: 0,
-    shardStatus: client.isReady() ? 'Online' : 'Offline',
+    shardStatus: 'online',
   });
 };
 
 app.get('/internal/stats', handleStats);
 app.get('/api/stats', handleStats);
 
-// 3. Danh sách server
+// Danh sách Guilds
 const handleServers = (req: any, res: any) => {
   const list = client.guilds.cache.map(g => ({
     id: g.id,
@@ -208,7 +204,7 @@ const handleServers = (req: any, res: any) => {
 app.get('/internal/servers', handleServers);
 app.get('/api/guilds', handleServers);
 
-// 4. Chi tiết server
+// Chi tiết Guild
 app.get('/internal/servers/:id', (req, res) => {
   const guild = client.guilds.cache.get(req.params.id);
   if (!guild) {
@@ -228,5 +224,5 @@ app.get('/internal/servers/:id', (req, res) => {
 
 const PORT = process.env.BOT_INTERNAL_PORT || 5001;
 app.listen(PORT, () => {
-  console.log(`[BOT-INTERNAL] API nội bộ sẵn sàng tại cổng ${PORT}`);
+  console.log(`[BOT-INTERNAL] API nội bộ đang chạy tại cổng ${PORT}`);
 });

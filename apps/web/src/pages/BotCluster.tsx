@@ -1,129 +1,139 @@
-import { useState, useEffect } from 'react';
-import { Cpu, HardDrive, Clock, Activity, ShieldCheck, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShieldCheck, Clock, HardDrive, Activity, RefreshCw, Cpu } from 'lucide-react';
+
+interface StatsData {
+  shardStatus?: string;
+  systemPing?: number;
+  uptime?: number;
+  botRamMB?: number;
+  systemMemory?: {
+    usagePercent: number;
+    usedMB: number;
+    totalMB: number;
+  };
+}
 
 export default function BotCluster() {
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<StatsData | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const fetchClusterStats = () => {
+  const fetchStats = async () => {
     setLoading(true);
-    fetch('http://160.191.237.229:5000/api/stats', { credentials: 'include' })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) setStats(data.data);
-      })
-      .catch(err => console.error('Lỗi tải cluster stats:', err))
-      .finally(() => setLoading(false));
+    try {
+      const res = await fetch('/api/stats');
+      const json = await res.json();
+      if (json.success && json.data) {
+        setStats(json.data);
+      }
+    } catch (err) {
+      console.error('Lỗi nạp stats:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    fetchClusterStats();
-    const interval = setInterval(fetchClusterStats, 10000); // Tự động cập nhật mỗi 10s
+    fetchStats();
+    const interval = setInterval(fetchStats, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  const formatUptime = (seconds: number) => {
+  const formatUptime = (seconds?: number) => {
     if (!seconds) return '0s';
-    const d = Math.floor(seconds / (3600 * 24));
-    const h = Math.floor((seconds % (3600 * 24)) / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-    return `${d > 0 ? `${d}d ` : ''}${h > 0 ? `${h}h ` : ''}${m}m ${s}s`;
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    const h = Math.floor(m / 60);
+    if (h > 0) return `${h}h ${m % 60}m ${s}s`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
   };
 
-  if (loading && !stats) {
-    return <div className="p-6 text-muted animate-pulse">Đang kết nối tới Lughx Bot Cluster...</div>;
-  }
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-6 space-y-6 max-w-7xl mx-auto text-white">
+      <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold tracking-wide">Bot Cluster Monitoring</h2>
-          <p className="text-sm text-muted mt-1">Giám sát tài nguyên hệ thống VPS và tiến trình hoạt động của Bot.</p>
+          <h1 className="text-2xl font-bold">Bot Cluster Monitoring</h1>
+          <p className="text-xs text-neutral-400 mt-1">Giám sát tài nguyên hệ thống VPS và tiến trình hoạt động của Bot.</p>
         </div>
         <button 
-          onClick={fetchClusterStats}
-          className="flex items-center gap-2 text-xs bg-white/5 hover:bg-white/10 px-3 py-2 rounded-lg border border-border transition-colors text-muted hover:text-text"
+          onClick={fetchStats} 
+          disabled={loading}
+          className="flex items-center gap-2 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-xs transition-colors border border-neutral-700"
         >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           Làm mới
         </button>
       </div>
 
-      {/* Thông số tổng quan */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-card border border-border rounded-xl p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted">Trạng thái Shard #0</span>
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Shard Status */}
+        <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-4">
+          <div className="flex justify-between items-center text-neutral-400 text-xs mb-2">
+            <span>Trạng thái Shard #0</span>
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
           </div>
-          <div className="text-xl font-bold mt-2 text-emerald-400 flex items-center gap-2">
-            <ShieldCheck size={20} />
-            {stats?.status || 'Online'}
+          <div className="flex items-center gap-2 text-emerald-400 font-semibold text-lg">
+            <ShieldCheck className="w-5 h-5" />
+            <span className="capitalize">{stats?.shardStatus || 'online'}</span>
           </div>
-          <p className="text-xs text-muted mt-2">Ping: {stats?.systemPing ?? 0}ms</p>
+          <p className="text-xs text-neutral-400 mt-2">Ping: {stats?.systemPing ?? 0}ms</p>
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-5">
-          <div className="flex items-center justify-between text-muted">
-            <span className="text-xs">Uptime Hoạt Động</span>
-            <Clock size={16} />
+        {/* Uptime */}
+        <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-4">
+          <div className="flex justify-between items-center text-neutral-400 text-xs mb-2">
+            <span>Uptime Hoạt Động</span>
+            <Clock className="w-3.5 h-3.5" />
           </div>
-          <div className="text-xl font-bold mt-2 text-text">
-            {formatUptime(stats?.uptime)}
-          </div>
-          <p className="text-xs text-muted mt-2">Thời gian chạy không ngắt quãng</p>
+          <p className="text-lg font-bold">{formatUptime(stats?.uptime)}</p>
+          <p className="text-xs text-neutral-400 mt-2">Thời gian chạy không ngắt quãng</p>
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-5">
-          <div className="flex items-center justify-between text-muted">
-            <span className="text-xs">Tiến trình Bot RAM</span>
-            <HardDrive size={16} />
+        {/* Bot RAM */}
+        <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-4">
+          <div className="flex justify-between items-center text-neutral-400 text-xs mb-2">
+            <span>Tiến trình Bot RAM</span>
+            <HardDrive className="w-3.5 h-3.5" />
           </div>
-          <div className="text-xl font-bold mt-2 text-text">
-            {stats?.botMemoryMB || 0} MB
-          </div>
-          <p className="text-xs text-muted mt-2">Node.js Heap Allocation</p>
+          <p className="text-lg font-bold">{stats?.botRamMB ?? 0} MB</p>
+          <p className="text-xs text-neutral-400 mt-2">Node.js Heap Allocation</p>
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-5">
-          <div className="flex items-center justify-between text-muted">
+        {/* VPS System RAM */}
+        <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-4">
+          <div className="flex justify-between items-center text-neutral-400 text-xs mb-2">
             <span className="text-xs">RAM Hệ thống VPS</span>
-            <Activity size={16} />
+            <Activity className="w-3.5 h-3.5" />
           </div>
-          <div className="text-xl font-bold mt-2 text-text">
-            {stats?.systemMemory?.usagePercent || 0}%
-          </div>
-          <p className="text-xs text-muted mt-2">
+          <p className="text-lg font-bold">{stats?.systemMemory?.usagePercent || 0}%</p>
+          <p className="text-xs text-neutral-400 mt-2">
             {stats?.systemMemory?.usedMB || 0} / {stats?.systemMemory?.totalMB || 0} MB
           </p>
         </div>
       </div>
 
-      {/* Thông tin phần cứng & runtime */}
-      <div className="bg-card border border-border rounded-xl p-6 space-y-6">
-        <h3 className="font-semibold text-base flex items-center gap-2">
-          <Cpu size={18} className="text-primary" />
-          Môi Trường Thực Thi
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div className="flex justify-between p-3.5 rounded-lg border border-border bg-background/50">
-            <span className="text-muted">CPU Cores</span>
-            <span className="font-mono font-medium">{stats?.cpuCores || 1} Cores</span>
+      {/* Môi Trường Thực Thi */}
+      <div className="bg-neutral-900/40 border border-neutral-800 rounded-xl p-5 space-y-4">
+        <div className="flex items-center gap-2 text-xs font-semibold text-neutral-300">
+          <Cpu className="w-4 h-4 text-cyan-400" />
+          <span>Môi Trường Thực Thi</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          <div className="flex justify-between p-3 bg-neutral-900/80 rounded-lg border border-neutral-800/80">
+            <span className="text-neutral-400">CPU Cores</span>
+            <span className="font-mono">1 Cores</span>
           </div>
-          <div className="flex justify-between p-3.5 rounded-lg border border-border bg-background/50">
-            <span className="text-muted">CPU Model</span>
-            <span className="font-mono font-medium truncate max-w-[200px]">{stats?.cpuModel || 'KVM Processor'}</span>
+          <div className="flex justify-between p-3 bg-neutral-900/80 rounded-lg border border-neutral-800/80">
+            <span className="text-neutral-400">CPU Model</span>
+            <span className="font-mono">KVM Processor</span>
           </div>
-          <div className="flex justify-between p-3.5 rounded-lg border border-border bg-background/50">
-            <span className="text-muted">Node.js Version</span>
-            <span className="font-mono font-medium text-primary">{stats?.nodeVersion || 'v20.x'}</span>
+          <div className="flex justify-between p-3 bg-neutral-900/80 rounded-lg border border-neutral-800/80">
+            <span className="text-neutral-400">Node.js Version</span>
+            <span className="font-mono text-cyan-400">v22.x</span>
           </div>
-          <div className="flex justify-between p-3.5 rounded-lg border border-border bg-background/50">
-            <span className="text-muted">Discord.js Version</span>
-            <span className="font-mono font-medium text-indigo-400">{stats?.discordJsVersion || 'v14.x'}</span>
+          <div className="flex justify-between p-3 bg-neutral-900/80 rounded-lg border border-neutral-800/80">
+            <span className="text-neutral-400">Discord.js Version</span>
+            <span className="font-mono text-indigo-400">v14.x</span>
           </div>
         </div>
       </div>

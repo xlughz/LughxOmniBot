@@ -1,57 +1,35 @@
 import { Router, Request, Response } from 'express';
-import { prisma } from '@lughx/database';
 
 const router = Router();
 
-// 1. Lấy danh sách toàn bộ server
+// Lấy danh sách toàn bộ server mà Bot đang tham gia
 router.get('/', async (req: Request, res: Response) => {
   try {
     const botRes = await fetch('http://localhost:5001/internal/servers');
-    if (!botRes.ok) throw new Error('Bot offline');
+    if (!botRes.ok) {
+      return res.status(502).json({ success: false, message: 'Bot nội bộ không phản hồi' });
+    }
     const servers = await botRes.json();
     res.json({ success: true, data: servers });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Lỗi kết nối tới Bot' });
+    console.error('[SERVERS_ERROR]', error);
+    res.status(500).json({ success: false, message: 'Không thể kết nối đến Bot nội bộ' });
   }
 });
 
-// 2. Lấy chi tiết 1 server + Cấu hình trong DB
+// Lấy thông tin chi tiết 1 server theo Guild ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const guildId = req.params.id;
-    
-    // Tạo config mặc định nếu server chưa từng được cài đặt
-    const config = await prisma.guildConfig.upsert({
-      where: { guildId },
-      update: {},
-      create: { guildId }
-    });
-    
-    // Lấy danh sách kênh từ Bot
-    const botRes = await fetch(`http://localhost:5001/internal/servers/${guildId}`);
-    const serverData = botRes.ok ? await botRes.json() : null;
-
-    res.json({ success: true, config, serverData });
+    const { id } = req.params;
+    const botRes = await fetch(`http://localhost:5001/internal/servers/${id}`);
+    if (!botRes.ok) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy máy chủ' });
+    }
+    const serverDetails = await botRes.json();
+    res.json({ success: true, data: serverDetails });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Lỗi tải cấu hình' });
-  }
-});
-
-// 3. Lưu cấu hình khi người dùng bấm Save
-router.post('/:id', async (req: Request, res: Response) => {
-  try {
-    const guildId = req.params.id;
-    const { prefix, welcomeChannelId, musicEnabled, modEnabled } = req.body;
-
-    const updated = await prisma.guildConfig.upsert({
-      where: { guildId },
-      update: { prefix, welcomeChannelId, musicEnabled, modEnabled },
-      create: { guildId, prefix, welcomeChannelId, musicEnabled, modEnabled }
-    });
-
-    res.json({ success: true, data: updated, message: 'Đã lưu cài đặt!' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Lỗi lưu cấu hình' });
+    console.error('[SERVER_DETAIL_ERROR]', error);
+    res.status(500).json({ success: false, message: 'Lỗi khi lấy thông tin máy chủ' });
   }
 });
 

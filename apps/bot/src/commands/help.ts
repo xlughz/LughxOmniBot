@@ -1,33 +1,23 @@
-import { SlashCommandBuilder, CommandInteraction, Message, EmbedBuilder } from 'discord.js';
+import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 
 export const data = new SlashCommandBuilder()
   .setName('help')
-  .setDescription('Hiển thị danh sách câu lệnh hỗ trợ');
+  .setDescription('Hiển thị danh sách các lệnh đang hoạt động trên hệ thống.');
 
-export async function executeSlash(interaction: CommandInteraction) {
+export async function executeSlash(interaction: ChatInputCommandInteraction) {
   const embed = new EmbedBuilder()
-    .setTitle('LughxOmniBot - Bảng Lệnh')
-    .setColor(0x38bdf8)
-    .setDescription('Bot hỗ trợ cả Slash Command (`/`) và Prefix tùy chỉnh trên Dashboard.')
+    .setColor(0x6366F1)
+    .setTitle('📖 Danh Sách Lệnh Khả Dụng')
+    .setDescription('Hệ thống bot đã đưa về kiến trúc tiêu chuẩn với các lệnh hệ thống chính:')
     .addFields(
-      { name: '/ping', value: 'Kiểm tra độ trễ mạng và phản hồi Discord API' },
-      { name: '/stats', value: 'Xem thông số phần cứng và tiến trình bot' },
-      { name: '/help', value: 'Xem hướng dẫn này' }
-    );
+      { name: '</ping:0>', value: 'Kiểm tra độ trễ mạng và phản hồi Gateway.' },
+      { name: '</stats:0>', value: 'Xem chi tiết mức tiêu thụ RAM, Uptime và số máy chủ.' },
+      { name: '</help:0>', value: 'Mở bảng trợ giúp này.' }
+    )
+    .setFooter({ text: 'Lughx Omni Bot Framework' })
+    .setTimestamp();
 
-  await interaction.reply({ embeds: [embed] });
+  await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
-export async function executePrefix(message: Message, prefix: string) {
-  const embed = new EmbedBuilder()
-    .setTitle('LughxOmniBot - Bảng Lệnh')
-    .setColor(0x38bdf8)
-    .setDescription(`Prefix hiện tại của máy chủ: \`${prefix}\`\nBạn có thể dùng dạng \`${prefix}<lệnh>\` hoặc gõ thẳng \`/<lệnh>\`.`)
-    .addFields(
-      { name: `${prefix}ping`, value: 'Kiểm tra độ trễ mạng' },
-      { name: `${prefix}stats`, value: 'Xem thông số hệ thống bot' },
-      { name: `${prefix}help`, value: 'Xem hướng dẫn này' }
-    );
-
-  await message.reply({ embeds: [embed] });
-}
+export const execute = executeSlash;

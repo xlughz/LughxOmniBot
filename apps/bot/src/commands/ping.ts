@@ -1,18 +1,24 @@
-import { SlashCommandBuilder, CommandInteraction, Message } from 'discord.js';
+import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 
 export const data = new SlashCommandBuilder()
   .setName('ping')
-  .setDescription('Kiểm tra độ trễ mạng và phản hồi Discord API');
+  .setDescription('Kiểm tra độ trễ của Bot và kết nối Discord Gateway.');
 
-export async function executeSlash(interaction: CommandInteraction) {
-  await interaction.reply({ content: 'Đang đo độ trễ...' });
-  const reply = await interaction.fetchReply();
-  const latency = reply.createdTimestamp - interaction.createdTimestamp;
-  await interaction.editReply(`Pong! Trễ mạng: \`${latency}ms\` | Discord API: \`${interaction.client.ws.ping}ms\``);
+export async function executeSlash(interaction: ChatInputCommandInteraction) {
+  const sent = await interaction.reply({ content: 'Đang đo độ trễ...', fetchReply: true });
+  const latency = sent.createdTimestamp - interaction.createdTimestamp;
+  const wsPing = interaction.client.ws.ping;
+
+  const embed = new EmbedBuilder()
+    .setColor(0x00FF7F)
+    .setTitle('🏓 Pong!')
+    .addFields(
+      { name: 'Độ trễ phản hồi (Roundtrip)', value: `\`${latency}ms\``, inline: true },
+      { name: 'Độ trễ Gateway (WebSocket)', value: `\`${wsPing}ms\``, inline: true }
+    )
+    .setTimestamp();
+
+  await interaction.editReply({ content: null, embeds: [embed] });
 }
 
-export async function executePrefix(message: Message) {
-  const sent = await message.reply('Đang đo độ trễ...');
-  const latency = sent.createdTimestamp - message.createdTimestamp;
-  await sent.edit(`Pong! Trễ mạng: \`${latency}ms\` | Discord API: \`${message.client.ws.ping}ms\``);
-}
+export const execute = executeSlash;
