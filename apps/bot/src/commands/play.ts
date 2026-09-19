@@ -172,26 +172,26 @@ export async function playTrackLogic(voiceChannel: any, textChannelId: string, q
   const node = shoukaku.nodes.get('lughx-lavalink') || Array.from(shoukaku.nodes.values())[0];
   if (!node) throw new Error('Không có kết nối Lavalink Node sẵn sàng');
 
-  const isUrl = /^https?:\/\//.test(query);
+const isUrl = /^https?:\/\//.test(query);
   const searchPattern = isUrl ? query : 'ytsearch:' + query;
   
   const result: any = await node.rest.resolve(searchPattern);
 
-  if (!result || !result.data || result.loadType === 'empty' || result.loadType === 'error') {
+  if (!result || result.loadType === 'empty' || result.loadType === 'error') {
     throw new Error('Không tìm thấy bài hát yêu cầu');
   }
 
-  let tracks: any[] = [];
+let tracks: any[] = [];
   if (result.loadType === 'playlist') {
-    tracks = result.data.tracks || [];
+    tracks = result.data?.tracks || [];
   } else if (result.loadType === 'search') {
     tracks = Array.isArray(result.data) ? result.data : [];
   } else if (result.loadType === 'track') {
     tracks = [result.data];
   }
 
-  if (tracks.length === 0) {
-    throw new Error('Không có track nào được tải về');
+if (!tracks || tracks.length === 0) {
+    throw new Error('Không tìm thấy bài hát yêu cầu');
   }
 
   tracks.forEach(t => {
