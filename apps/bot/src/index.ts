@@ -6,8 +6,7 @@ import {
   Routes, 
   Collection, 
   Interaction, 
-  GuildMember,
-  PermissionsBitField
+  GuildMember 
 } from 'discord.js';
 import { config } from 'dotenv';
 import { join } from 'path';
@@ -15,11 +14,12 @@ import { prisma } from '@lughx/database';
 import express from 'express';
 import os from 'os';
 
-// Tích hợp DisTube Audio Engine
+// Tích hợp DisTube Audio Engine & Plugins
 import { DisTube } from 'distube';
 import { SpotifyPlugin } from '@distube/spotify';
 import { SoundCloudPlugin } from '@distube/soundcloud';
 import { YtDlpPlugin } from '@distube/yt-dlp';
+import { YouTubePlugin } from '@distube/ytdl-core';
 
 // Import các modules lệnh
 import * as pingCmd from './commands/ping';
@@ -47,11 +47,12 @@ const commands = new Collection<string, any>();
 const commandList = [pingCmd, statsCmd, helpCmd, playCmd];
 commandList.forEach(cmd => commands.set(cmd.data.name, cmd));
 
-// --- Khởi tạo DisTube Music Engine ---
+// --- Khởi tạo DisTube Music Engine chuẩn DisTube v5 ---
 const distube = new DisTube(client, {
   emitNewSongOnly: true,
   nsfw: true,
   plugins: [
+    new YouTubePlugin(),
     new SpotifyPlugin(),
     new SoundCloudPlugin(),
     new YtDlpPlugin(),
@@ -154,7 +155,7 @@ async function deploySlashCommands(clientId: string, token: string) {
   try {
     console.log('[SLASH] Đang dọn dẹp các lệnh Guild cũ và đồng bộ Slash Commands...');
 
-    // 1. Xóa sạch Guild Commands trên tất cả server bot tham gia để triệt tiêu lỗi lặp đôi x2
+    // 1. Xóa sạch Guild Commands trên tất cả server bot tham gia để không bị lặp đôi
     for (const guild of client.guilds.cache.values()) {
       await rest.put(
         Routes.applicationGuildCommands(clientId, guild.id),
@@ -162,7 +163,7 @@ async function deploySlashCommands(clientId: string, token: string) {
       ).catch(() => null);
     }
 
-    // 2. Đăng ký duy nhất danh sách Global Commands chuẩn
+    // 2. Chỉ đăng ký duy nhất danh sách Global Commands chuẩn
     await rest.put(
       Routes.applicationCommands(clientId),
       { body: slashData }
@@ -184,7 +185,7 @@ client.once('clientReady', async () => {
 
 // --- Lắng nghe các tương tác (Buttons, Modals, Slash Commands) ---
 client.on('interactionCreate', async (interaction: Interaction) => {
-  // 1. Xử lý Nút bấm trên bảng điều khiển nhạc
+  // 1. Nút bấm trên bảng điều khiển nhạc
   if (interaction.isButton()) {
     const queue = distube.getQueue(interaction.guildId!);
 
@@ -270,24 +271,15 @@ client.on('interactionCreate', async (interaction: Interaction) => {
         return interaction.reply({ content: '⌁ Bạn cần kết nối vào kênh Voice trước!', ephemeral: true });
       }
 
-      const botMember = interaction.guild?.members.me;
-      if (botMember && !voiceChannel.permissionsFor(botMember).has([PermissionsBitField.Flags.Connect, PermissionsBitField.Flags.Speak])) {
-        return interaction.reply({
-          content: '⚠️ Bot thiếu quyền **Connect** hoặc **Speak** trong kênh thoại này!',
-          ephemeral: true,
-        });
-      }
-
       await interaction.deferReply({ ephemeral: true });
       try {
         await distube.play(voiceChannel, query, {
           member,
           textChannel: interaction.channel as any,
-          skip: false,
         });
         await interaction.editReply({ content: `✦ Đã nạp thành công yêu cầu: \`${query}\`` });
       } catch (err: any) {
-        await interaction.editReply({ content: `⚠️ Không thể nạp bài hát: \`${err.message || 'Lỗi không xác định'}\`` });
+        await interaction.editReply({ content: `⚠️ Không thể nạp bài hát: ${err.message || 'Lỗi không xác định'}` });
       }
     }
     return;
