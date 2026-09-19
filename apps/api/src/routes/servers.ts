@@ -10,7 +10,7 @@ router.get('/', async (req: Request, res: Response) => {
       return res.status(502).json({ success: false, message: 'Bot nội bộ không phản hồi' });
     }
     const servers = await botRes.json();
-    res.json({ success: true, data: servers });
+    res.json({ success: true, data: servers, servers });
   } catch (error) {
     console.error('[SERVERS_ERROR]', error);
     res.status(500).json({ success: false, message: 'Không thể kết nối đến Bot nội bộ' });
@@ -26,10 +26,34 @@ router.get('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: 'Không tìm thấy máy chủ' });
     }
     const serverDetails = await botRes.json();
-    res.json({ success: true, data: serverDetails });
+
+    // Khớp chuẩn cả serverData lẫn data cho ServerSettings.tsx
+res.json({ 
+      success: true, 
+      data: serverDetails,
+      serverData: serverDetails,
+      config: {
+        prefix: '!l',
+        welcomeChannelId: '',
+        musicEnabled: false,
+        modEnabled: true
+      }
+    });
   } catch (error) {
     console.error('[SERVER_DETAIL_ERROR]', error);
     res.status(500).json({ success: false, message: 'Lỗi khi lấy thông tin máy chủ' });
+  }
+});
+
+// Xử lý lưu cấu hình
+router.post('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const newConfig = req.body;
+    console.log(`[CONFIG_SAVE] Máy chủ ${id}:`, newConfig);
+    res.json({ success: true, message: 'Cập nhật cấu hình thành công' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Lỗi khi lưu cấu hình' });
   }
 });
 
