@@ -19,7 +19,6 @@ import { DisTube } from 'distube';
 import { SpotifyPlugin } from '@distube/spotify';
 import { SoundCloudPlugin } from '@distube/soundcloud';
 import { YtDlpPlugin } from '@distube/yt-dlp';
-import { YouTubePlugin } from '@distube/ytdl-core';
 
 // Import các modules lệnh
 import * as pingCmd from './commands/ping';
@@ -47,12 +46,11 @@ const commands = new Collection<string, any>();
 const commandList = [pingCmd, statsCmd, helpCmd, playCmd];
 commandList.forEach(cmd => commands.set(cmd.data.name, cmd));
 
-// --- Khởi tạo DisTube Music Engine chuẩn DisTube v5 ---
+// --- Khởi tạo DisTube Music Engine chuẩn ---
 const distube = new DisTube(client, {
   emitNewSongOnly: true,
   nsfw: true,
   plugins: [
-    new YouTubePlugin(),
     new SpotifyPlugin(),
     new SoundCloudPlugin(),
     new YtDlpPlugin(),
@@ -155,7 +153,7 @@ async function deploySlashCommands(clientId: string, token: string) {
   try {
     console.log('[SLASH] Đang dọn dẹp các lệnh Guild cũ và đồng bộ Slash Commands...');
 
-    // 1. Xóa sạch Guild Commands trên tất cả server bot tham gia để không bị lặp đôi
+    // Xóa sạch Guild Commands trên các server để tránh trùng lặp
     for (const guild of client.guilds.cache.values()) {
       await rest.put(
         Routes.applicationGuildCommands(clientId, guild.id),
@@ -163,7 +161,7 @@ async function deploySlashCommands(clientId: string, token: string) {
       ).catch(() => null);
     }
 
-    // 2. Chỉ đăng ký duy nhất danh sách Global Commands chuẩn
+    // Đăng ký Global Commands duy nhất
     await rest.put(
       Routes.applicationCommands(clientId),
       { body: slashData }
