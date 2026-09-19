@@ -14,7 +14,7 @@ import { prisma } from '@lughx/database';
 import express from 'express';
 import os from 'os';
 
-// Tích hợp Shoukaku Lavalink Client
+// Tích hợp Shoukaku Lavalink v4 Client
 import { Shoukaku, Connectors } from 'shoukaku';
 
 // Import các modules lệnh
@@ -43,7 +43,7 @@ const commands = new Collection<string, any>();
 const commandList = [pingCmd, statsCmd, helpCmd, playCmd];
 commandList.forEach(cmd => commands.set(cmd.data.name, cmd));
 
-// --- Cấu hình Node Lavalink v4 kết nối cục bộ ---
+// Cấu hình Node Lavalink v4 dùng IPv4 tường minh
 const Nodes = [{
   name: 'lughx-lavalink',
   url: '127.0.0.1:2333',
@@ -141,7 +141,7 @@ app.listen(INTERNAL_PORT, () => {
   console.log('[BOT-INTERNAL] API nội bộ đang chạy tại cổng ' + INTERNAL_PORT);
 });
 
-// --- Triển khai đồng bộ Slash Commands ---
+// Triển khai Slash Commands duy nhất
 async function deploySlashCommands(clientId: string, token: string) {
   const rest = new REST({ version: '10' }).setToken(token);
   const slashData = commandList.map(cmd => cmd.data.toJSON());
@@ -175,9 +175,8 @@ client.once('clientReady', async () => {
   }
 });
 
-// --- Lắng nghe các tương tác Buttons, Modals, Slash Commands ---
+// Lắng nghe tương tác Buttons, Modals, Slash Commands
 client.on('interactionCreate', async (interaction: Interaction) => {
-  // 1. Nút bấm điều khiển nhạc
   if (interaction.isButton()) {
     if (!interaction.guildId) return;
     const q = musicQueues.get(interaction.guildId);
@@ -257,7 +256,6 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     return;
   }
 
-  // 2. Form Modal nạp bài hát
   if (interaction.isModalSubmit()) {
     if (interaction.customId === 'music_link_modal') {
       const query = interaction.fields.getTextInputValue('music_query_input');
@@ -279,7 +277,6 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     return;
   }
 
-  // 3. Slash Commands
   if (interaction.isChatInputCommand()) {
     const cmd = commands.get(interaction.commandName);
     if (!cmd) return;
@@ -297,7 +294,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
   }
 });
 
-// --- Lắng nghe Prefix Commands ---
+// Lắng nghe Prefix Commands
 client.on('messageCreate', async (message: Message) => {
   if (message.author.bot || !message.guild) return;
 
@@ -330,7 +327,7 @@ client.on('messageCreate', async (message: Message) => {
   }
 });
 
-// --- Chào mừng thành viên mới ---
+// Chào mừng thành viên mới
 client.on('guildMemberAdd', async (member) => {
   try {
     const config = await prisma.guildConfig.findUnique({

@@ -167,7 +167,7 @@ export function createMusicModal() {
   return modal;
 }
 
-// Hàm lõi xử lý phát nhạc qua Shoukaku
+// Hàm lõi xử lý phát nhạc qua Shoukaku & Lavalink v4
 export async function playTrackLogic(voiceChannel: any, textChannelId: string, query: string, user: User) {
   const node = shoukaku.nodes.get('lughx-lavalink') || Array.from(shoukaku.nodes.values())[0];
   if (!node) throw new Error('Không có kết nối Lavalink Node sẵn sàng');
@@ -205,7 +205,7 @@ export async function playTrackLogic(voiceChannel: any, textChannelId: string, q
       guildId: voiceChannel.guild.id,
       channelId: voiceChannel.id,
       shardId: 0,
-      deaf: true,
+      deaf: false,
     });
 
     queueObj = {
@@ -263,6 +263,8 @@ export async function playTrackLogic(voiceChannel: any, textChannelId: string, q
   if (!queueObj.currentTrack) {
     const first = queueObj.queue.shift();
     queueObj.currentTrack = first;
+    
+    // Gửi payload playTrack chuẩn Lavalink v4
     await queueObj.player.playTrack({ track: { encoded: first.encoded } });
 
     const ch = client.channels.cache.get(textChannelId) as any;
