@@ -38,7 +38,7 @@ const client = new Client({
 export const commands = new Collection<string, any>();
 const commandsArray: any[] = [];
 
-// 1. Quét nạp tự động toàn bộ lệnh trong thư mục commands (bỏ qua file liên quan đến play)
+// 1. Quét nạp tự động toàn bộ lệnh trong thư mục commands
 const commandsPath = path.join(__dirname, 'commands');
 if (fs.existsSync(commandsPath)) {
   const commandFiles = fs.readdirSync(commandsPath).filter(file => 
@@ -64,7 +64,7 @@ if (fs.existsSync(commandsPath)) {
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`[BOT] LughxOmniBot đã online: ${readyClient.user.tag}`);
 
-  // (Tùy chọn) Giả lập sự kiện chào mừng khi bot vừa khởi động để test nhanh giao diện
+  // Giả lập sự kiện chào mừng khi bot vừa khởi động để test nhanh giao diện
   setTimeout(() => {
     const guild = readyClient.guilds.cache.first();
     if (guild) {
@@ -80,7 +80,6 @@ client.once(Events.ClientReady, async (readyClient) => {
     const rest = new REST({ version: '10' }).setToken(token);
     try {
       console.log('[SLASH] Bắt đầu đồng bộ danh sách Slash Commands...');
-
       await rest.put(
         Routes.applicationCommands(readyClient.user.id),
         { body: commandsArray }
@@ -124,13 +123,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-// 4. Xử lý sự kiện chào mừng thành viên mới (Chuẩn mẫu yêu cầu kèm ID kênh và GIF nhỏ)
+// 4. Xử lý sự kiện chào mừng thành viên mới (GuildMemberAdd)
 client.on(Events.GuildMemberAdd, async (member) => {
   try {
-    const config = await prisma.guildConfig.findUnique({
-      where: { guildId: member.guild.id },
-    });
-
+    const config = await prisma.guildConfig.findUnique({ where: { guildId: member.guild.id } });
     if (!config?.welcomeChannelId) return;
 
     const channel = member.guild.channels.cache.get(config.welcomeChannelId) 
@@ -145,37 +141,62 @@ client.on(Events.GuildMemberAdd, async (member) => {
       const legitId = "1531985290292498453";
       const priceId = "1417913643156115598";
 
-      const welcomeEmbed = new EmbedBuilder()
+      const customMsg = (config as any).welcomeMessage;
+      const embed = new EmbedBuilder()
         .setColor(0x2f3136)
-        .setAuthor({ 
-          name: member.user.tag, 
-          iconURL: member.user.displayAvatarURL({ size: 128 }) 
-        })
+        .setAuthor({ name: member.user.tag, iconURL: member.user.displayAvatarURL({ size: 128 }) })
         .setTitle(`Welcome to ${member.guild.name} 🤖`)
         .setDescription(
-          `😎 **Server tụi mình chuyên cho thuê acc Free Fire và một số dịch vụ khác nếu bạn cần** 😎,\n\n` +
-          `> 🎫 <#${ticketId}> : ticket support\n` +
-          `> 📦 <#${tosId}> : chính sách / tos\n` +
-          `> 💼 <#${legitId}> : check legit\n` +
-          `> 🥐 <#${priceId}> : bảng giá\n\n` +
-          `*Mọi thắc mắc vui lòng liên hệ qua <@&${adminRoleId}> để được hỗ trợ. Chúc bạn có trải nghiệm thật tốt khi tham gia sever nếu có sai sót gì hãy feedback nhé xin cảm ơn*`
+          customMsg || 
+          (`😎 **Server tụi mình chuyên cho thuê acc Free Fire và một số dịch vụ khác nếu bạn cần** 😎,\n\n` +
+           `> 🎫 <#${ticketId}> : ticket support\n` +
+           `> 📦 <#${tosId}> : chính sách / tos\n` +
+           `> 💼 <#${legitId}> : check legit\n` +
+           `> 🥐 <#${priceId}> : bảng giá\n\n` +
+           `*Mọi thắc mắc vui lòng liên hệ qua <@&${adminRoleId}> để được hỗ trợ.*`)
         )
         .setImage(welcomeGifUrl)
         .setTimestamp();
 
-      await (channel as any).send({
-        content: `Hi ${member} chúc bạn một ngày tốt lành`,
-        embeds: [welcomeEmbed]
-      });
-
-      console.log(`[WELCOME] Đã gửi Embed chuẩn mẫu cho ${member.user.tag}`);
+      await (channel as any).send({ content: `Hi ${member} chúc bạn một ngày tốt lành`, embeds: [embed] });
+      console.log(`[WELCOME] Đã gửi thông báo chào mừng cho ${member.user.tag}`);
     }
   } catch (error) {
-    console.error('[WELCOME_ERROR] Lỗi gửi tin nhắn chào mừng:', error);
+    console.error('[WELCOME_ERROR]', error);
   }
 });
 
-// 5. Xử lý tin nhắn văn bản thông thường theo Prefix động từ Database
+// 5. Xử lý sự kiện thành viên rời server (GuildMemberRemove - Goodbye)
+client.on(Events.GuildMemberRemove, async (member) => {
+  try {
+    const config = await prisma.guildConfig.findUnique({ where: { guildId: member.guild.id } });
+    const goodbyeChanId = (config as any)?.goodbyeChannelId;
+    if (!goodbyeChanId) return;
+
+    const channel = member.guild.channels.cache.get(goodbyeChanId) 
+      || await member.guild.channels.fetch(goodbyeChanId).catch(() => null);
+
+    if (channel && channel.isTextBased()) {
+      const customGoodbyeMsg = (config as any)?.goodbyeMessage;
+      const goodbyeEmbed = new EmbedBuilder()
+        .setColor(0xef4444)
+        .setAuthor({ name: member.user.tag, iconURL: member.user.displayAvatarURL({ size: 128 }) })
+        .setTitle(`Tạm biệt thành viên! 👋`)
+        .setDescription(
+          customGoodbyeMsg || 
+          `😢 **${member.user.tag}** đã rời khỏi server **${member.guild.name}**. Hẹn gặp lại bạn vào một ngày gần nhất!`
+        )
+        .setTimestamp();
+
+      await (channel as any).send({ content: `Goodbye ${member}!`, embeds: [goodbyeEmbed] });
+      console.log(`[GOODBYE] Đã gửi thông báo tạm biệt cho ${member.user.tag}`);
+    }
+  } catch (error) {
+    console.error('[GOODBYE_ERROR]', error);
+  }
+});
+
+// 6. Xử lý tin nhắn văn bản thông thường theo Prefix động từ Database
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot || !message.guild) return;
 

@@ -1,23 +1,24 @@
-import { ChatInputCommandInteraction, SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
 
-export const data = new SlashCommandBuilder()
-  .setName('help')
-  .setDescription('Hiển thị danh sách các lệnh đang hoạt động trên hệ thống.');
+export default {
+  data: new SlashCommandBuilder()
+    .setName('help')
+    .setDescription('Hiển thị danh sách các lệnh khả dụng của LughxOmniBot'),
+  
+  async executeSlash(interaction: ChatInputCommandInteraction) {
+    const helpEmbed = new EmbedBuilder()
+      .setColor(0x06b6d4)
+      .setTitle('🤖 LughxOmniBot - Bảng Trợ Giúp')
+      .setDescription('Dưới đây là danh sách các lệnh Slash Commands hiện đang hoạt động trên hệ thống:')
+      .addFields(
+        { name: '/ping', value: 'Kiểm tra độ trễ (latency) của bot.', inline: false },
+        { name: '/stats', value: 'Xem thống kê tài nguyên hệ thống, RAM, và số lượng server.', inline: false },
+        { name: '/testwelcome', value: 'Giả lập gửi khung tin nhắn chào mừng (Welcome) vào kênh đã cấu hình.', inline: false },
+        { name: '/help', value: 'Hiển thị bảng hướng dẫn này.', inline: false }
+      )
+      .setFooter({ text: 'LughxOmniBot • Quản lý server thông minh' })
+      .setTimestamp();
 
-export async function executeSlash(interaction: ChatInputCommandInteraction) {
-  const embed = new EmbedBuilder()
-    .setColor(0x6366F1)
-    .setTitle('📖 Danh Sách Lệnh Khả Dụng')
-    .setDescription('Hệ thống bot đã đưa về kiến trúc tiêu chuẩn với các lệnh hệ thống chính:')
-    .addFields(
-      { name: '</ping:0>', value: 'Kiểm tra độ trễ mạng và phản hồi Gateway.' },
-      { name: '</stats:0>', value: 'Xem chi tiết mức tiêu thụ RAM, Uptime và số máy chủ.' },
-      { name: '</help:0>', value: 'Mở bảng trợ giúp này.' }
-    )
-    .setFooter({ text: 'Lughx Omni Bot Framework' })
-    .setTimestamp();
-
-  await interaction.reply({ embeds: [embed], ephemeral: true });
-}
-
-export const execute = executeSlash;
+    await interaction.reply({ embeds: [helpEmbed], flags: 64 });
+  }
+};

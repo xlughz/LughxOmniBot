@@ -35,12 +35,15 @@ model Session {
 }
 
 model GuildConfig {
-  id               String   @id @default(cuid())
-  guildId          String   @unique
-  prefix           String   @default("!l")
-  welcomeChannelId String?
-  musicEnabled     Boolean  @default(true)
-  modEnabled       Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  guildId            String   @unique
+  prefix             String   @default("!l")
+  welcomeChannelId   String?
+  welcomeMessage     String?  // Nội dung tin nhắn chào mừng tùy chỉnh
+  goodbyeChannelId   String?  // Kênh tạm biệt
+  goodbyeMessage     String?  // Nội dung tin nhắn tạm biệt tùy chỉnh
+  musicEnabled       Boolean  @default(true)
+  modEnabled         Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
