@@ -35,6 +35,7 @@ export default {
       const legitId = "1531985290292498453";
       const priceId = "1417913643156115598";
 
+      const customMsg = (config as any).welcomeMessage;
       const welcomeEmbed = new EmbedBuilder()
         .setColor(0x2f3136)
         .setAuthor({ 
@@ -43,12 +44,13 @@ export default {
         })
         .setTitle(`Welcome to ${interaction.guild.name} 🤖`)
         .setDescription(
-          `😎 **Server tụi mình chuyên cho thuê acc Free Fire và một số dịch vụ khác nếu bạn cần** 😎,\n\n` +
-          `> 🎫 <#${ticketId}> : ticket support\n` +
-          `> 📦 <#${tosId}> : chính sách / tos\n` +
-          `> 💼 <#${legitId}> : check legit\n` +
-          `> 🥐 <#${priceId}> : bảng giá\n\n` +
-          `*Mọi thắc mắc vui lòng liên hệ qua <@&${adminRoleId}> để được hỗ trợ. Chúc bạn có trải nghiệm thật tốt khi tham gia sever nếu có sai sót gì hãy feedback nhé xin cảm ơn*`
+          customMsg || 
+          (`😎 **Server tụi mình chuyên cho thuê acc Free Fire và một số dịch vụ khác nếu bạn cần** 😎,\n\n` +
+           `> 🎫 <#${ticketId}> : ticket support\n` +
+           `> 📦 <#${tosId}> : chính sách / tos\n` +
+           `> 💼 <#${legitId}> : check legit\n` +
+           `> 🥐 <#${priceId}> : bảng giá\n\n` +
+           `*Mọi thắc mắc vui lòng liên hệ qua <@&${adminRoleId}> để được hỗ trợ.*`)
         )
         .setImage(welcomeGifUrl)
         .setTimestamp();
