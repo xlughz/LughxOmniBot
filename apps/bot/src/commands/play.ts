@@ -173,25 +173,39 @@ export async function playTrackLogic(voiceChannel: any, textChannelId: string, q
   if (!node) throw new Error('Không có kết nối Lavalink Node sẵn sàng');
 
 const isUrl = /^https?:\/\//.test(query);
-  const searchPattern = isUrl ? query : 'ytsearch:' + query;
   
-  const result: any = await node.rest.resolve(searchPattern);
+  // Ưu tiên resolve query; nếu không phải URL thì thử ytsearch, nếu rỗng fallback sang scsearch
+  let result: any = null;
+  if (isUrl) {
+    result = await node.rest.resolve(query);
+  } else {
+    result = await node.rest.resolve(`ytsearch:${query}`);
+    // Nếu YouTube bị chặn hoặc rỗng dữ liệu, tự động fallback sang SoundCloud
+    if (!result || result.loadType === 'empty' || result.loadType === 'error' || (Array.isArray(result.data) && result.data.length === 0)) {
+      result = await node.rest.resolve(`scsearch:${query}`);
+    }
+  }
 
   if (!result || result.loadType === 'empty' || result.loadType === 'error') {
     throw new Error('Không tìm thấy bài hát yêu cầu');
   }
 
-let tracks: any[] = [];
+  let tracks: any[] = [];
   if (result.loadType === 'playlist') {
-    tracks = result.data?.tracks || [];
+    tracks = result.data?.tracks || result.tracks || [];
   } else if (result.loadType === 'search') {
-    tracks = Array.isArray(result.data) ? result.data : [];
+    tracks = Array.isArray(result.data) ? result.data : (result.tracks || []);
   } else if (result.loadType === 'track') {
-    tracks = [result.data];
+    tracks = [result.data || result];
   }
 
-if (!tracks || tracks.length === 0) {
-    throw new Error('Không tìm thấy bài hát yêu cầu');
+  // Fallback kiểm tra thêm cấu trúc Lavalink v3/v4 hỗn hợp
+  if (tracks.length === 0 && Array.isArray(result.data)) {
+    tracks = result.data;
+  }
+
+  if (tracks.length === 0) {
+    throw new Error('Không có track nào được tải về');
   }
 
   tracks.forEach(t => {
