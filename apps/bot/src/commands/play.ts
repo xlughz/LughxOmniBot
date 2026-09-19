@@ -45,7 +45,7 @@ export function createMusicEmbed(track?: any, isPlaying = true, queueObj?: any) 
     .setColor(0x18181b)
     .setFooter({ 
       text: '✦ LUGHX SOUND SYSTEM ✦ HI-RES LAVALINK AUDIO ✦', 
-      iconURL: 'https://cdn.discordapp.com/embed/avatars/0.png' 
+      iconURL: client.user?.displayAvatarURL() || 'https://cdn.discordapp.com/embed/avatars/0.png'
     });
 
   if (track && queueObj) {
@@ -59,7 +59,7 @@ export function createMusicEmbed(track?: any, isPlaying = true, queueObj?: any) 
     embed
       .setTitle('♫ 「 ' + (track.title || 'Unknown Track') + ' 」')
       .setURL(track.uri || 'https://discord.com')
-      .setThumbnail(track.artworkUrl || 'https://cdn.discordapp.com/embed/avatars/0.png')
+      .setThumbnail(track.artworkUrl || client.user?.displayAvatarURL() || 'https://cdn.discordapp.com/embed/avatars/0.png')
       .setDescription(
         '```text\n' + progressBar + ' [' + formatTime(currentMs) + ' / ' + formatTime(totalMs) + ']\n```'
       )
@@ -164,7 +164,7 @@ export function createMusicModal() {
   return modal;
 }
 
-// Hàm lõi xử lý phát nhạc qua Shoukaku (Tương thích Lavalink v4)
+// Hàm lõi xử lý phát nhạc qua Shoukaku
 export async function playTrackLogic(voiceChannel: any, textChannelId: string, query: string, user: User) {
   const node = shoukaku.options.nodeResolver(shoukaku.nodes);
   if (!node) throw new Error('Không có kết nối Lavalink Node sẵn sàng');
@@ -172,14 +172,12 @@ export async function playTrackLogic(voiceChannel: any, textChannelId: string, q
   const isUrl = /^https?:\/\//.test(query);
   const searchPattern = isUrl ? query : 'ytsearch:' + query;
   
-  // Gọi Lavalink v4 REST API
   const result: any = await node.rest.resolve(searchPattern);
 
   if (!result || !result.data || result.loadType === 'empty' || result.loadType === 'error') {
     throw new Error('Không tìm thấy bài hát yêu cầu');
   }
 
-  // Phân tích danh sách track theo chuẩn Lavalink v4
   let tracks: any[] = [];
   if (result.loadType === 'playlist') {
     tracks = result.data.tracks || [];
@@ -193,7 +191,6 @@ export async function playTrackLogic(voiceChannel: any, textChannelId: string, q
     throw new Error('Không có track nào được tải về');
   }
 
-  // Gắn requester vào metadata
   tracks.forEach(t => {
     if (t.info) t.info.requester = user;
   });
@@ -218,19 +215,7 @@ export async function playTrackLogic(voiceChannel: any, textChannelId: string, q
     };
     musicQueues.set(voiceChannel.guild.id, queueObj);
 
-    // Bắt sự kiện khi track bắt đầu phát -> Gửi/Cập nhật Embed
-    player.on('start', () => {
-      const q = musicQueues.get(voiceChannel.guild.id);
-      if (!q || !q.currentTrack) return;
-      const ch = client.channels.cache.get(q.textChannelId) as any;
-      if (ch) {
-        const embed = createMusicEmbed(q.currentTrack.info, true, q);
-        const controls = createMusicControls(true);
-        ch.send({ embeds: [embed], components: controls });
-      }
-    });
-
-    // Bắt sự kiện khi kết thúc bài hát
+    // Bắt sự kiện khi bài hát kết thúc
     player.on('end', async () => {
       const q = musicQueues.get(voiceChannel.guild.id);
       if (!q) return;
@@ -244,6 +229,13 @@ export async function playTrackLogic(voiceChannel: any, textChannelId: string, q
         const next = q.queue.shift();
         q.currentTrack = next;
         await q.player.playTrack({ track: { encoded: next.encoded } });
+
+        const ch = client.channels.cache.get(q.textChannelId) as any;
+        if (ch) {
+          const embed = createMusicEmbed(next.info, true, q);
+          const controls = createMusicControls(true);
+          ch.send({ embeds: [embed], components: controls });
+        }
       } else {
         q.currentTrack = null;
         if (voiceChannel.guild.id) {
@@ -258,7 +250,7 @@ export async function playTrackLogic(voiceChannel: any, textChannelId: string, q
     });
   }
 
-  // Đẩy vào danh sách chờ
+  // Đưa track vào hàng đợi
   if (result.loadType === 'search') {
     queueObj.queue.push(tracks[0]);
   } else {
@@ -267,21 +259,30 @@ export async function playTrackLogic(voiceChannel: any, textChannelId: string, q
     }
   }
 
-  // Nếu bot đang rảnh, phát ngay bài đầu tiên
+  // Nếu hiện tại chưa có bài hát nào đang phát -> Bắt đầu phát ngay
   if (!queueObj.currentTrack) {
     const first = queueObj.queue.shift();
     queueObj.currentTrack = first;
+    
+    // Gửi lệnh play đến Lavalink v4
     await queueObj.player.playTrack({ track: { encoded: first.encoded } });
+
+    // Gửi Embed giao diện điều khiển ra kênh chat
+    const ch = client.channels.cache.get(textChannelId) as any;
+    if (ch) {
+      const embed = createMusicEmbed(first.info, true, queueObj);
+      const controls = createMusicControls(true);
+      await ch.send({ embeds: [embed], components: controls });
+    }
   } else {
     const ch = client.channels.cache.get(textChannelId) as any;
     if (ch) {
       const addedTrack = tracks[0];
-      ch.send('✦ Đã thêm **' + (addedTrack?.info?.title || 'bài hát') + '** vào hàng đợi!');
+      await ch.send('✦ Đã thêm **' + (addedTrack?.info?.title || 'bài hát') + '** vào hàng đợi!');
     }
   }
 }
 
-// Sửa lại hàm executeSlash để defer an toàn không crash
 export async function executeSlash(interaction: ChatInputCommandInteraction) {
   const member = interaction.member as GuildMember;
   const voiceChannel = member?.voice?.channel;
@@ -301,7 +302,7 @@ export async function executeSlash(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply({ ephemeral: true });
   try {
     await playTrackLogic(voiceChannel, interaction.channelId || '', query, interaction.user);
-    return interaction.editReply({ content: '✦ Đang nạp và phát nhạc qua Lavalink v4...' });
+    return interaction.editReply({ content: '✦ Đã kết nối và nạp bài hát thành công!' });
   } catch (err: any) {
     console.error('[PLAY_ERROR]', err);
     return interaction.editReply({ content: '⚠️ Lỗi phát nhạc: `' + (err.message || 'Lỗi không xác định') + '`' });
