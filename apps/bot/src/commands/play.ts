@@ -21,7 +21,7 @@ export const data = new SlashCommandBuilder()
       .setRequired(false)
   );
 
-// Thanh tiến trình Minimalist dạng ký tự Typo
+// Thanh tiến trình Minimalist dạng typography phẳng
 function createProgressBar(currentSeconds: number, totalSeconds: number, barLength = 16) {
   if (!totalSeconds || totalSeconds === 0) return '━'.repeat(barLength);
   const progress = Math.min(Math.max(currentSeconds / totalSeconds, 0), 1);
@@ -32,7 +32,7 @@ function createProgressBar(currentSeconds: number, totalSeconds: number, barLeng
   return `${filled}◉${empty}`;
 }
 
-// Embed giao diện điều khiển chuẩn phong cách Minimal Premium
+// Embed giao diện điều khiển Minimal Premium
 export function createMusicEmbed(song?: any, isPlaying = true, queue?: any) {
   const embed = new EmbedBuilder()
     .setColor(0x18181b)
@@ -79,7 +79,7 @@ export function createMusicEmbed(song?: any, isPlaying = true, queue?: any) {
   return embed;
 }
 
-// Bảng nút điều khiển
+// Bộ nút bấm điều khiển
 export function createMusicControls(hasQueue = false) {
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
@@ -143,7 +143,7 @@ export function createMusicControls(hasQueue = false) {
   return [row1, row2];
 }
 
-// Popup Modal nhập link
+// Popup Modal nhập link hoặc từ khóa
 export function createMusicModal() {
   const modal = new ModalBuilder()
     .setCustomId('music_link_modal')
@@ -166,61 +166,66 @@ export async function executeSlash(interaction: ChatInputCommandInteraction, dis
   const member = interaction.member as GuildMember;
   const voiceChannel = member?.voice?.channel;
 
+  const query = interaction.options.getString('query');
+
+  // Khi không nhập tham số: chỉ hiển thị giao diện controller ngay lập tức, không kết nối voice
+  if (!query) {
+    const queue = distube.getQueue(interaction.guildId!);
+    const currentTrack = queue?.songs[0];
+    const embed = createMusicEmbed(currentTrack, queue?.playing, queue);
+    const components = createMusicControls(!!queue);
+
+    return interaction.reply({ embeds: [embed], components });
+  }
+
+  // Khi có tham số query: yêu cầu phải tham gia voice channel
   if (!voiceChannel) {
     return interaction.reply({ 
-      content: '⌁ Bạn cần tham gia một kênh Voice trước khi gọi trình phát nhạc!', 
+      content: '⌁ Bạn cần tham gia một kênh Voice trước khi phát nhạc!', 
       ephemeral: true 
     });
   }
 
-  const query = interaction.options.getString('query');
-
-  if (query) {
-    await interaction.deferReply();
-    try {
-      await distube.play(voiceChannel, query, {
-        member: member,
-        textChannel: interaction.channel,
-      });
-      return interaction.deleteReply().catch(() => null);
-    } catch (err: any) {
-      return interaction.editReply({ content: `⚠️ Lỗi phát nhạc: ${err.message || 'Không thể phát bài hát này'}` });
-    }
+  await interaction.deferReply();
+  try {
+    await distube.play(voiceChannel, query, {
+      member: member,
+      textChannel: interaction.channel as any,
+    });
+    return interaction.deleteReply().catch(() => null);
+  } catch (err: any) {
+    console.error('[PLAY_ERROR]', err);
+    return interaction.editReply({ 
+      content: `⚠️ Lỗi phát nhạc: ${err.message || 'Không thể kết nối kênh voice'}` 
+    });
   }
-
-  const queue = distube.getQueue(interaction.guildId!);
-  const currentTrack = queue?.songs[0];
-  const embed = createMusicEmbed(currentTrack, queue?.playing, queue);
-  const components = createMusicControls(!!queue);
-
-  await interaction.reply({ embeds: [embed], components });
 }
 
 // Thực thi Prefix Command !lplay
 export async function executePrefix(message: Message, distube: any, args: string[]) {
-  const voiceChannel = message.member?.voice?.channel;
+  const query = args.join(' ').trim();
 
+  // Khi không có tham số: gửi embed controller
+  if (!query) {
+    const queue = distube.getQueue(message.guildId!);
+    const currentTrack = queue?.songs[0];
+    const embed = createMusicEmbed(currentTrack, queue?.playing, queue);
+    const components = createMusicControls(!!queue);
+    return message.reply({ embeds: [embed], components });
+  }
+
+  const voiceChannel = message.member?.voice?.channel;
   if (!voiceChannel) {
     return message.reply('⌁ Bạn cần tham gia một kênh Voice trước!');
   }
 
-  const query = args.join(' ');
-  if (query) {
-    try {
-      await distube.play(voiceChannel, query, {
-        member: message.member,
-        textChannel: message.channel,
-      });
-    } catch (err: any) {
-      message.reply(`⚠️ Lỗi phát nhạc: ${err.message || 'Không thể phát bài hát này'}`);
-    }
-    return;
+  try {
+    await distube.play(voiceChannel, query, {
+      member: message.member,
+      textChannel: message.channel as any,
+    });
+  } catch (err: any) {
+    console.error('[PLAY_ERROR]', err);
+    message.reply(`⚠️ Lỗi phát nhạc: ${err.message || 'Không thể kết nối kênh voice'}`);
   }
-
-  const queue = distube.getQueue(message.guildId!);
-  const currentTrack = queue?.songs[0];
-  const embed = createMusicEmbed(currentTrack, queue?.playing, queue);
-  const components = createMusicControls(!!queue);
-
-  await message.reply({ embeds: [embed], components });
 }
