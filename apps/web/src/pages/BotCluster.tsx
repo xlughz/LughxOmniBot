@@ -17,20 +17,21 @@ export default function BotCluster() {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const fetchStats = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/stats');
-      const json = await res.json();
-      if (json.success && json.data) {
-        setStats(json.data);
-      }
-    } catch (err) {
-      console.error('Lỗi nạp stats:', err);
-    } finally {
-      setLoading(false);
+const fetchStats = async () => {
+  setLoading(true);
+  try {
+    const apiUrl = `http://${window.location.hostname}:5000/api/stats`;
+    const res = await fetch(apiUrl, { credentials: 'omit' });
+    const json = await res.json();
+    if (json.success && json.data) {
+      setStats(json.data);
     }
-  };
+  } catch (err) {
+    console.error('Lỗi nạp stats:', err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     fetchStats();
