@@ -6,7 +6,8 @@ import {
   Routes, 
   Collection, 
   Interaction, 
-  GuildMember 
+  GuildMember,
+  PermissionsBitField
 } from 'discord.js';
 import { config } from 'dotenv';
 import { join } from 'path';
@@ -49,6 +50,7 @@ commandList.forEach(cmd => commands.set(cmd.data.name, cmd));
 // --- Khởi tạo DisTube Music Engine ---
 const distube = new DisTube(client, {
   emitNewSongOnly: true,
+  nsfw: true,
   plugins: [
     new SpotifyPlugin(),
     new SoundCloudPlugin(),
@@ -152,7 +154,7 @@ async function deploySlashCommands(clientId: string, token: string) {
   try {
     console.log('[SLASH] Đang dọn dẹp các lệnh Guild cũ và đồng bộ Slash Commands...');
 
-    // 1. Xóa sạch Guild Commands trên tất cả server bot tham gia để không bị lặp x2 lệnh
+    // 1. Xóa sạch Guild Commands trên tất cả server bot tham gia để triệt tiêu lỗi lặp đôi x2
     for (const guild of client.guilds.cache.values()) {
       await rest.put(
         Routes.applicationGuildCommands(clientId, guild.id),
@@ -160,7 +162,7 @@ async function deploySlashCommands(clientId: string, token: string) {
       ).catch(() => null);
     }
 
-    // 2. Chỉ đăng ký duy nhất danh sách Global Commands chuẩn
+    // 2. Đăng ký duy nhất danh sách Global Commands chuẩn
     await rest.put(
       Routes.applicationCommands(clientId),
       { body: slashData }
@@ -268,15 +270,24 @@ client.on('interactionCreate', async (interaction: Interaction) => {
         return interaction.reply({ content: '⌁ Bạn cần kết nối vào kênh Voice trước!', ephemeral: true });
       }
 
+      const botMember = interaction.guild?.members.me;
+      if (botMember && !voiceChannel.permissionsFor(botMember).has([PermissionsBitField.Flags.Connect, PermissionsBitField.Flags.Speak])) {
+        return interaction.reply({
+          content: '⚠️ Bot thiếu quyền **Connect** hoặc **Speak** trong kênh thoại này!',
+          ephemeral: true,
+        });
+      }
+
       await interaction.deferReply({ ephemeral: true });
       try {
         await distube.play(voiceChannel, query, {
           member,
           textChannel: interaction.channel as any,
+          skip: false,
         });
         await interaction.editReply({ content: `✦ Đã nạp thành công yêu cầu: \`${query}\`` });
       } catch (err: any) {
-        await interaction.editReply({ content: `⚠️ Không thể nạp bài hát: ${err.message || 'Lỗi không xác định'}` });
+        await interaction.editReply({ content: `⚠️ Không thể nạp bài hát: \`${err.message || 'Lỗi không xác định'}\`` });
       }
     }
     return;

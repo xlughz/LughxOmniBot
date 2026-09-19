@@ -9,7 +9,8 @@ import {
   ModalBuilder, 
   TextInputBuilder, 
   TextInputStyle,
-  GuildMember
+  GuildMember,
+  PermissionsBitField
 } from 'discord.js';
 
 export const data = new SlashCommandBuilder()
@@ -165,10 +166,9 @@ export function createMusicModal() {
 export async function executeSlash(interaction: ChatInputCommandInteraction, distube: any) {
   const member = interaction.member as GuildMember;
   const voiceChannel = member?.voice?.channel;
-
   const query = interaction.options.getString('query');
 
-  // Khi không nhập tham số: chỉ hiển thị giao diện controller ngay lập tức, không kết nối voice
+  // Nếu không nhập bài hát: chỉ hiển thị Controller Embed mà không kết nối voice
   if (!query) {
     const queue = distube.getQueue(interaction.guildId!);
     const currentTrack = queue?.songs[0];
@@ -178,11 +178,20 @@ export async function executeSlash(interaction: ChatInputCommandInteraction, dis
     return interaction.reply({ embeds: [embed], components });
   }
 
-  // Khi có tham số query: yêu cầu phải tham gia voice channel
+  // Nếu có query: kiểm tra voice channel của user
   if (!voiceChannel) {
     return interaction.reply({ 
       content: '⌁ Bạn cần tham gia một kênh Voice trước khi phát nhạc!', 
       ephemeral: true 
+    });
+  }
+
+  // Kiểm tra quyền của Bot trong voice channel
+  const botMember = interaction.guild?.members.me;
+  if (botMember && !voiceChannel.permissionsFor(botMember).has([PermissionsBitField.Flags.Connect, PermissionsBitField.Flags.Speak])) {
+    return interaction.reply({
+      content: '⚠️ Bot thiếu quyền **Connect** hoặc **Speak** trong kênh thoại này!',
+      ephemeral: true,
     });
   }
 
@@ -191,12 +200,13 @@ export async function executeSlash(interaction: ChatInputCommandInteraction, dis
     await distube.play(voiceChannel, query, {
       member: member,
       textChannel: interaction.channel as any,
+      skip: false,
     });
     return interaction.deleteReply().catch(() => null);
   } catch (err: any) {
     console.error('[PLAY_ERROR]', err);
     return interaction.editReply({ 
-      content: `⚠️ Lỗi phát nhạc: ${err.message || 'Không thể kết nối kênh voice'}` 
+      content: `⚠️ Lỗi phát nhạc: \`${err.message || 'Không thể kết nối Voice'}\`` 
     });
   }
 }
@@ -205,7 +215,7 @@ export async function executeSlash(interaction: ChatInputCommandInteraction, dis
 export async function executePrefix(message: Message, distube: any, args: string[]) {
   const query = args.join(' ').trim();
 
-  // Khi không có tham số: gửi embed controller
+  // Không có query: gửi controller
   if (!query) {
     const queue = distube.getQueue(message.guildId!);
     const currentTrack = queue?.songs[0];
@@ -219,13 +229,19 @@ export async function executePrefix(message: Message, distube: any, args: string
     return message.reply('⌁ Bạn cần tham gia một kênh Voice trước!');
   }
 
+  const botMember = message.guild?.members.me;
+  if (botMember && !voiceChannel.permissionsFor(botMember).has([PermissionsBitField.Flags.Connect, PermissionsBitField.Flags.Speak])) {
+    return message.reply('⚠️ Bot thiếu quyền **Connect** hoặc **Speak** trong kênh thoại này!');
+  }
+
   try {
     await distube.play(voiceChannel, query, {
       member: message.member,
       textChannel: message.channel as any,
+      skip: false,
     });
   } catch (err: any) {
     console.error('[PLAY_ERROR]', err);
-    message.reply(`⚠️ Lỗi phát nhạc: ${err.message || 'Không thể kết nối kênh voice'}`);
+    message.reply(`⚠️ Lỗi phát nhạc: \`${err.message || 'Không thể kết nối Voice'}\``);
   }
 }
