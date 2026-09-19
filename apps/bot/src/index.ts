@@ -13,6 +13,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { prisma } from '@lughx/database';
 
 dotenv.config();
 
@@ -109,6 +110,56 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await interaction.reply(replyContent);
       }
     }
+  }
+});
+
+// 4. Xử lý sự kiện khi có thành viên mới tham gia server (Tự động chào mừng theo kênh DB)
+client.on(Events.GuildMemberAdd, async (member) => {
+  try {
+    const config = await prisma.guildConfig.findUnique({
+      where: { guildId: member.guild.id },
+    });
+
+    if (config?.welcomeChannelId) {
+      const channel = member.guild.channels.cache.get(config.welcomeChannelId) 
+        || await member.guild.channels.fetch(config.welcomeChannelId).catch(() => null);
+
+      if (channel && channel.isTextBased()) {
+        await (channel as any).send(
+          `👋 Chào mừng <@${member.id}> đã tham gia **${member.guild.name}**!`
+        );
+        console.log(`[WELCOME] Đã gửi thông báo chào mừng cho ${member.user.tag} tại ${member.guild.name}`);
+      }
+    }
+  } catch (error) {
+    console.error('[WELCOME_ERROR] Lỗi khi gửi tin nhắn chào mừng:', error);
+  }
+});
+
+// 5. Xử lý tin nhắn văn bản thông thường theo Prefix động từ Database
+client.on(Events.MessageCreate, async (message) => {
+  if (message.author.bot || !message.guild) return;
+
+  try {
+    // Đọc Prefix cấu hình từ Database (mặc định "!l" nếu chưa cấu hình)
+    const config = await prisma.guildConfig.findUnique({
+      where: { guildId: message.guild.id },
+    });
+    const prefix = config?.prefix || '!l';
+
+    if (!message.content.startsWith(prefix)) return;
+
+    const args = message.content.slice(prefix.length).trim().split(/ +/);
+    const commandName = args.shift()?.toLowerCase();
+    if (!commandName) return;
+
+    if (commandName === 'ping') {
+      message.reply(`🏓 Pong! Độ trễ bot: **${client.ws.ping}ms**`);
+    } else if (commandName === 'help') {
+      message.reply(`📌 **Tiền tố hiện tại:** \`${prefix}\`\nCác lệnh khả dụng: \`${prefix}ping\`, \`${prefix}help\` hoặc gõ dấu \`/\` để dùng Slash Commands.`);
+    }
+  } catch (error) {
+    console.error('[PREFIX_COMMAND_ERROR]', error);
   }
 });
 
@@ -240,7 +291,7 @@ app.get('/internal/servers/:id', async (req, res) => {
       channelsCount: textChannels.length,
       rolesCount: guild.roles.cache.size,
       joinedTimestamp: guild.joinedTimestamp,
-      channels: textChannels, // Danh sách text channels đã sẵn sàng cho Frontend
+      channels: textChannels,
     });
   } catch (error) {
     console.error('[SERVER_DETAIL_ERROR]', error);
