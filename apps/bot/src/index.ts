@@ -6,8 +6,7 @@ import {
   Routes, 
   Collection, 
   Interaction, 
-  GuildMember,
-  Channel 
+  GuildMember 
 } from 'discord.js';
 import { config } from 'dotenv';
 import { join } from 'path';
@@ -15,16 +14,19 @@ import { prisma } from '@lughx/database';
 import express from 'express';
 import os from 'os';
 
-import { DisTube, Queue, Song } from 'distube';
+// Tích hợp DisTube Audio Engine
+import { DisTube } from 'distube';
 import { SpotifyPlugin } from '@distube/spotify';
 import { SoundCloudPlugin } from '@distube/soundcloud';
 import { YtDlpPlugin } from '@distube/yt-dlp';
 
+// Import các modules lệnh
 import * as pingCmd from './commands/ping';
 import * as statsCmd from './commands/stats';
 import * as helpCmd from './commands/help';
 import * as playCmd from './commands/play';
 
+// Nạp biến môi trường từ thư mục gốc
 config({ path: join(__dirname, '../../../.env') });
 
 const client = new Client({
@@ -33,12 +35,13 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildVoiceStates, // Bắt buộc để bot kết nối Voice và stream nhạc
   ],
 });
 
 const DEFAULT_PREFIX = '!l';
 
+// Khởi tạo Collection lưu trữ Commands
 const commands = new Collection<string, any>();
 const commandList = [pingCmd, statsCmd, helpCmd, playCmd];
 commandList.forEach(cmd => commands.set(cmd.data.name, cmd));
@@ -53,27 +56,29 @@ const distube = new DisTube(client, {
   ],
 });
 
-distube.on('playSong', (queue: Queue, song: Song) => {
+// Tự động phát sinh Embed Controller khi bài hát mới bắt đầu phát
+(distube as any).on('playSong', (queue: any, song: any) => {
   const embed = playCmd.createMusicEmbed(song, true, queue);
   const components = playCmd.createMusicControls(true);
   queue.textChannel?.send({ embeds: [embed], components });
 });
 
-distube.on('addSong', (queue: Queue, song: Song) => {
+(distube as any).on('addSong', (queue: any, song: any) => {
   queue.textChannel?.send(`⌁ Đã thêm vào danh sách phát: **${song.name}** \`[${song.formattedDuration}]\``);
 });
 
-distube.on('error', (channel: Channel | undefined, error: Error) => {
+(distube as any).on('error', (channel: any, error: any) => {
   console.error('[DISTUBE_ERROR]', error);
   if (channel && 'send' in channel) {
-    (channel as any).send(`⚠️ Đã xảy ra lỗi âm thanh: \`${error.message.slice(0, 100)}\``);
+    channel.send(`⚠️ Đã xảy ra lỗi âm thanh: \`${error.message?.slice(0, 100) || 'Lỗi không xác định'}\``);
   }
 });
 
-// --- Internal API Server (Cổng 5001) ---
+// --- Khởi tạo Internal API Server cho Bot (Cổng 5001) ---
 const app = express();
 const INTERNAL_PORT = 5001;
 
+// 1. Thống kê chi tiết tài nguyên hệ thống và bot
 app.get('/internal/stats', (req, res) => {
   const memoryUsage = process.memoryUsage();
   const totalMem = os.totalmem();
@@ -99,6 +104,7 @@ app.get('/internal/stats', (req, res) => {
   });
 });
 
+// 2. Danh sách toàn bộ server
 app.get('/internal/servers', (req, res) => {
   const servers = client.guilds.cache.map(guild => ({
     id: guild.id,
@@ -110,6 +116,7 @@ app.get('/internal/servers', (req, res) => {
   res.json(servers);
 });
 
+// 3. Chi tiết 1 server và danh sách kênh chat
 app.get('/internal/servers/:id', async (req, res) => {
   try {
     const guildId = req.params.id;
@@ -136,10 +143,12 @@ app.get('/internal/servers/:id', async (req, res) => {
   }
 });
 
+// Lắng nghe cổng nội bộ
 app.listen(INTERNAL_PORT, () => {
   console.log(`[BOT-INTERNAL] API nội bộ đang chạy tại cổng ${INTERNAL_PORT}`);
 });
 
+// --- Hàm Deploy Slash Commands lên Discord Gateway ---
 async function deploySlashCommands(clientId: string, token: string) {
   const rest = new REST({ version: '10' }).setToken(token);
   const slashData = commandList.map(cmd => cmd.data.toJSON());
@@ -164,9 +173,9 @@ client.once('clientReady', async () => {
   }
 });
 
-// --- Lắng nghe Tương tác ---
+// --- Lắng nghe các tương tác (Slash Commands, Buttons, Modals) ---
 client.on('interactionCreate', async (interaction: Interaction) => {
-  // 1. Buttons
+  // 1. Tương tác Nút bấm trên Music Controller
   if (interaction.isButton()) {
     const queue = distube.getQueue(interaction.guildId!);
 
@@ -229,7 +238,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
       case 'music_queue': {
         const qList = queue.songs
           .slice(0, 5)
-          .map((s: Song, idx: number) => `\`${idx + 1}.\` **${s.name}** \`[${s.formattedDuration}]\``)
+          .map((s: any, idx: number) => `\`${idx + 1}.\` **${s.name}** \`[${s.formattedDuration}]\``)
           .join('\n');
         await interaction.reply({
           content: `✦ **Hàng Đợi Hiện Tại (${queue.songs.length} bài):**\n${qList}${queue.songs.length > 5 ? '\n*...và các bài khác*' : ''}`,
@@ -241,7 +250,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     return;
   }
 
-  // 2. Modals
+  // 2. Tương tác gửi Form Modal nạp nhạc
   if (interaction.isModalSubmit()) {
     if (interaction.customId === 'music_link_modal') {
       const query = interaction.fields.getTextInputValue('music_query_input');
@@ -262,7 +271,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
     return;
   }
 
-  // 3. Slash Commands
+  // 3. Thực thi Slash Commands
   if (interaction.isChatInputCommand()) {
     const cmd = commands.get(interaction.commandName);
     if (!cmd) return;
@@ -284,7 +293,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
   }
 });
 
-// --- Prefix Commands ---
+// --- Lắng nghe Prefix Commands (Tin nhắn) ---
 client.on('messageCreate', async (message: Message) => {
   if (message.author.bot || !message.guild) return;
 
@@ -317,7 +326,7 @@ client.on('messageCreate', async (message: Message) => {
   }
 });
 
-// --- Welcome Event ---
+// --- Sự kiện Chào mừng Thành viên Mới ---
 client.on('guildMemberAdd', async (member) => {
   try {
     const config = await prisma.guildConfig.findUnique({
