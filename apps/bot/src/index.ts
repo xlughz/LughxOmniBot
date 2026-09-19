@@ -46,7 +46,7 @@ commandList.forEach(cmd => commands.set(cmd.data.name, cmd));
 // --- Cấu hình Node Lavalink v4 kết nối cục bộ ---
 const Nodes = [{
   name: 'lughx-lavalink',
-  url: 'localhost:2333',
+  url: '127.0.0.1:2333',
   auth: 'youshallnotpass',
   secure: false
 }];
