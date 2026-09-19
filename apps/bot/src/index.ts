@@ -144,29 +144,29 @@ app.listen(INTERNAL_PORT, () => {
   console.log(`[BOT-INTERNAL] API nội bộ đang chạy tại cổng ${INTERNAL_PORT}`);
 });
 
-// --- Triển khai đồng bộ Slash Commands tức thời cho tất cả Guild ---
+// --- Triển khai đồng bộ Slash Commands: Triệt tiêu nhân đôi lệnh ---
 async function deploySlashCommands(clientId: string, token: string) {
   const rest = new REST({ version: '10' }).setToken(token);
   const slashData = commandList.map(cmd => cmd.data.toJSON());
 
   try {
-    console.log('[SLASH] Đang đồng bộ danh sách Slash Commands lên Discord Gateway...');
-    
-    // 1. Cập nhật Global
+    console.log('[SLASH] Đang dọn dẹp các lệnh Guild cũ và đồng bộ Slash Commands...');
+
+    // 1. Xóa sạch Guild Commands trên tất cả server bot tham gia để không bị lặp x2 lệnh
+    for (const guild of client.guilds.cache.values()) {
+      await rest.put(
+        Routes.applicationGuildCommands(clientId, guild.id),
+        { body: [] }
+      ).catch(() => null);
+    }
+
+    // 2. Chỉ đăng ký duy nhất danh sách Global Commands chuẩn
     await rest.put(
       Routes.applicationCommands(clientId),
       { body: slashData }
     );
 
-    // 2. Cập nhật trực tiếp tức thì từng Guild
-    for (const guild of client.guilds.cache.values()) {
-      await rest.put(
-        Routes.applicationGuildCommands(clientId, guild.id),
-        { body: slashData }
-      ).catch(() => null);
-    }
-
-    console.log(`[SLASH] Đồng bộ thành công ${slashData.length} lệnh Slash!`);
+    console.log(`[SLASH] Đã dọn sạch trùng lặp và đồng bộ thành công ${slashData.length} lệnh Global duy nhất!`);
   } catch (error) {
     console.error('[SLASH_DEPLOY_ERROR] Lỗi khi deploy Slash Commands:', error);
   }
@@ -182,7 +182,7 @@ client.once('clientReady', async () => {
 
 // --- Lắng nghe các tương tác (Buttons, Modals, Slash Commands) ---
 client.on('interactionCreate', async (interaction: Interaction) => {
-  // 1. Nút bấm trên bảng điều khiển nhạc
+  // 1. Xử lý Nút bấm trên bảng điều khiển nhạc
   if (interaction.isButton()) {
     const queue = distube.getQueue(interaction.guildId!);
 
@@ -291,7 +291,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
       if (interaction.commandName === 'lplay') {
         await cmd.executeSlash(interaction as any, distube);
       } else {
-        await cmd.executeSlash(interaction);
+        await cmd.executeSlash(interaction as any);
       }
     } catch (err) {
       console.error(`[COMMAND_ERROR] Lỗi khi chạy lệnh /${interaction.commandName}:`, err);
